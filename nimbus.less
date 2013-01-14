@@ -1,0 +1,35 @@
+@navbar-top-height: 42px;
+@navbar-bottom-height: 57px;
+
+.table tbody tr th.ascending {
+    background-color: #dff0d8;
+}
+
+.table tbody tr th.ascending > span:after {
+    content: '^';
+    float: right;
+}
+
+.table tbody tr th.descending > span:after {
+    content: '^';
+    float: right;
+    -webkit-transform:rotate(-180deg);
+}
+
+button > img {
+    width: 14px;
+    height: 14px;
+    margin-top: 1px;
+}
+
+.between-navbars {
+    position: absolute;
+    width: 100%;
+    top: @navbar-top-height;
+    bottom: @navbar-bottom-height;
+}
+
+#main {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <title>Nimbus</title>
+    <link href="//netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="nimbus.css" rel="stylesheet">
+</head>
+<body>
+    <div id="header" class="navbar">
+        <div class="navbar-inner">
+            <a href="#" class="brand">Nimbus</a>
+            <div class="btn-group">
+                <button type="button" class="btn">
+                    <i class="icon-th-large"></i>
+                </button>
+                <button type="button" class="btn">
+                    <i class="icon-th-list"></i>
+                </button>                
+                <button type="button" class="btn">
+                    <img src="images/glyphicons_239_albums.png" alt="" />
+                </button>                
+            </div>
+            <button type="button" class="btn">
+                <i class="icon-share"></i>
+            </button>
+            <div class="pull-right">
+                <form action="" class="navbar-search">
+                    <input type="text" class="search-query" placeholder="Search">
+                </form>
+                <button type="button" id="sign-inout" class="btn" data-loading-text="signing-in..." data-signout-text="sign-out">sign-in</button>                
+            </div>
+        </div>
+    </div>
+    <div id="main" class="between-navbars">
+        <table class="table"></table>
+    </div>
+    <div id="footer" class="navbar-fixed-bottom">
+        <div class="navbar-inner">
+            <ul class="breadcrumb"></ul>            
+        </div>
+    </div>
+    <script src="http://fgnass.github.com/spin.js/dist/spin.min.js"></script>
+    <script src="http://code.jquery.com/jquery-1.8.3.min.js"></script>
+    <script src="//netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.8.1/dropbox.min.js"></script>
+    <script src="nimbus.js"></script>
+</body>
+</html>

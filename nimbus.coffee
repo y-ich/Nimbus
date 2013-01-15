@@ -82,15 +82,18 @@ typeIcon48 = (typeIcon) ->
         when 'page_white_compressed' then 'page_white_zip48'
         else typeIcon + '48'
 
+thumbnailUrl = (stat, size = 'small') ->
+    if stat.hasThumbnail
+        extension = getExtension stat.name
+        dropbox.thumbnailUrl stat.path,
+            png: not (extension is 'jpg' or extension is 'jpeg')
+            size: size
+    else
+        "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
+
 makeFileList = (stats, order, direction) ->
     ITEMS =
-        image: (stat) ->
-            src = if stat.hasThumbnail
-                    extension = getExtension stat.name
-                    dropbox.thumbnailUrl stat.path, png: not (extension is 'jpg' or extension is 'jpeg')
-                else
-                    "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
-            "<td><img src=\"#{src}\"></td>"
+        image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
         name: (stat) -> "<td>#{stat.name}</td>"
         date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
         size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
@@ -123,7 +126,28 @@ makeFileList = (stats, order, direction) ->
     $main.append $div
     $table.on 'click', 'tr', onClickFileRow # enable to click.
 
-showFolder = (path = '/') ->
+makeCoverFlow = (stats) ->
+    $main.children().remove()
+    $main.append '<div id="coverflow"></div>'
+    options =
+        width: '100%'
+        coverwidth: 320
+        height: $main.height()
+        playlist: stats.map (stat) ->
+            "title": stat.name
+            "description": ''
+            "image": thumbnailUrl stat, 'l'
+            "link": ''
+            "duration": ''
+    coverflow('coverflow').setup(options).on 'ready', ->
+    
+showFolder = (stats) ->
+    if $('#view > button.active').val() is 'coverflow'
+        makeCoverFlow stats
+    else
+        makeFileList stats, config.fileList.order, config.fileList.direction
+    
+getAndShowFolder = (path = '/', coverflowOn = false) ->
     spinner.spin document.body
     dropbox.readdir path, null, (error, names, stat, stats) ->
         spinner.stop()
@@ -132,7 +156,7 @@ showFolder = (path = '/') ->
         else
             updateFolderList path
             currentStats = stats
-            makeFileList stats, config.fileList.order, config.fileList.direction
+            showFolder stats
 
 restoreConfig = ->
     defaultConfig =
@@ -179,7 +203,7 @@ initializeDropbox = ->
                     $signInout.button 'reset'
                 else
                     $signInout.button 'signout'
-                    showFolder config.currentFolder
+                    getAndShowFolder config.currentFolder
             break
     catch error
         console.log error
@@ -194,7 +218,7 @@ onClickFileRow = ->
             $this.addClass 'info'
         else if stat.isFolder
             $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
-            showFolder stat.path
+            getAndShowFolder stat.path
             config.currentFolder = stat.path
             localStorage['nimbus-config'] = JSON.stringify config
 
@@ -213,12 +237,14 @@ initializeEventHandlers = ->
                 if error then handleError error else $this.button 'reset'
         spinner.spin document.body
 
+    $('#view > button').on 'click', -> setTimeout (-> showFolder currentStats), 0
+
     $folderList.on 'click', 'li:not(.active) > a', ->
         $this = $(this)
         $this.parent().nextUntil().remove()
         $this.parent().addClass 'active'
         path = $this.data 'path'
-        showFolder path
+        getAndShowFolder path
         config.currentFolder = path
         localStorage['nimbus-config'] = JSON.stringify config
         false # prevent default

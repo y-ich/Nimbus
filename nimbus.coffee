@@ -10,12 +10,13 @@
 
 API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
 dropbox = null
+currentStats = null
 config = null
 spinner = new Spinner color: '#fff'
 
 # view
 $signInout = $('#sign-inout')
-$fileTable = $('#main table')
+$main = $('#main')
 $folderList = $('#footer .breadcrumb')
 
 # general functions
@@ -84,14 +85,12 @@ makeFileList = (stats, order, direction) ->
         date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
         size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
         kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
-    if stats?
-        $fileTable.data 'dropbox', stats
-    else
-        stats = $fileTable.data 'dropbox'
-    $fileTable.children().remove()
+
+    $div = $('<div class="touch-scrolling"><table class="table"></table></div>')
+    $table = $div.children()
     
     th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}><span>#{key}</span></th>"
-    $fileTable.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
+    $table.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
             
     sign = if direction is 'ascending' then 1 else -1
     sortFunc = switch order
@@ -108,7 +107,11 @@ makeFileList = (stats, order, direction) ->
     for stat in stats
         $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
         $tr.data 'dropbox-stat', stat
-        $fileTable.append $tr
+        $table.append $tr
+
+    $main.children().remove()
+    $main.append $div
+    $table.on 'click', 'tr', onClickFileRow # enable to click.
 
 showFolder = (path = '/') ->
     spinner.spin document.body
@@ -118,8 +121,8 @@ showFolder = (path = '/') ->
             handleError error
         else
             updateFolderList path
+            currentStats = stats
             makeFileList stats, config.fileList.order, config.fileList.direction
-        $fileTable.on 'click', 'tr', onClickFileRow # enable to click.
 
 restoreConfig = ->
     defaultConfig =
@@ -177,10 +180,10 @@ onClickFileRow = ->
         if not stat?
             return
         if stat.isFile
-            $fileTable.find('tr').removeClass 'info'
+            $main.find('tr').removeClass 'info'
             $this.addClass 'info'
         else if stat.isFolder
-            $fileTable.off 'click', 'tr', onClickFileRow # disable during updating.
+            $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
             showFolder stat.path
             config.currentFolder = stat.path
             localStorage['nimbus-config'] = JSON.stringify config
@@ -210,7 +213,7 @@ initializeEventHandlers = ->
         localStorage['nimbus-config'] = JSON.stringify config
         false # prevent default
     
-    $fileTable.on 'click', 'tr > th:not(:first)', ->
+    $main.on 'click', 'tr > th:not(:first)', ->
         $this = $(this)
         if $this.hasClass 'ascending'
             config.fileList.direction = 'descending'
@@ -219,7 +222,7 @@ initializeEventHandlers = ->
         else
             config.fileList.order = $this.children('span').text()
             config.fileList.direction = 'ascending'
-        makeFileList null, config.fileList.order, config.fileList.direction
+        makeFileList currentStats, config.fileList.order, config.fileList.direction
 
 restoreConfig()
 initializeDropbox()

@@ -73,7 +73,13 @@ handleError = (error) ->
 
 makeFileList = (stats, order, direction) ->
     ITEMS =
-        image: (stat) -> "<td><img src=\"images/dropbox-api-icons/48x48/#{stat.typeIcon}48.gif\"></td>"
+        image: (stat) ->
+            src = if stat.hasThumbnail
+                    extension = getExtension stat.name
+                    dropbox.thumbnailUrl stat.path, png: not (extension is 'jpg' or extension is 'jpeg')
+                else
+                    "images/dropbox-api-icons/48x48/#{stat.typeIcon}48.gif"
+            "<td><img src=\"#{src}\"></td>"
         name: (stat) -> "<td>#{stat.name}</td>"
         date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
         size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"

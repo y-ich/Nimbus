@@ -72,6 +72,16 @@ handleError = (error) ->
             alert 'Sorry, there seems something wrong in software.'
 
 
+typeIcon48 = (typeIcon) ->
+    switch typeIcon
+        when 'page_white_excel' then 'excel48'
+        when 'page_white_film' then 'page_white_dvd'
+        when 'page_white_powerpoint' then 'powerpoint48'
+        when 'page_white_word' then 'word48'
+        when 'page_white_sound' then 'music48'
+        when 'page_white_compressed' then 'page_white_zip48'
+        else typeIcon + '48'
+
 makeFileList = (stats, order, direction) ->
     ITEMS =
         image: (stat) ->
@@ -79,7 +89,7 @@ makeFileList = (stats, order, direction) ->
                     extension = getExtension stat.name
                     dropbox.thumbnailUrl stat.path, png: not (extension is 'jpg' or extension is 'jpeg')
                 else
-                    "images/dropbox-api-icons/48x48/#{stat.typeIcon}48.gif"
+                    "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
             "<td><img src=\"#{src}\"></td>"
         name: (stat) -> "<td>#{stat.name}</td>"
         date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"

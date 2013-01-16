@@ -263,14 +263,30 @@ initializeEventHandlers = ->
     $('#menu-new-folder').on 'click', (event) ->
         event.preventDefault()
         name = prompt 'Folder Name'
-        if name and name isnt ''
-            spinner.spin document.body
-            dropbox.mkdir config.currentFolder + '/' + name, (error, stat) ->
-                spinner.stop()
-                if error
-                    handleError error
-                else
-                    getAndShowFolder config.currentFolder
+        return unless name and name isnt ''
+
+        spinner.spin document.body
+        dropbox.mkdir config.currentFolder + '/' + name, (error, stat) ->
+            spinner.stop()
+            if error
+                handleError error
+            else
+                getAndShowFolder config.currentFolder
+
+    $('#menu-upload').on 'click', (event) ->
+        event.preventDefault()
+        $('#file-picker').click()
+
+    $('#file-picker').on 'change', (event) ->
+        file = event.target.files[0]
+        spinner.spin document.body
+        dropbox.writeFile config.currentFolder + '/' + file.name, file, null, (error, stat) ->
+            spinner.stop()
+            if error
+                handleError error
+            else
+                getAndShowFolder config.currentFolder
+            
 
 restoreConfig()
 initializeDropbox()

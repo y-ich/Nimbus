@@ -343,6 +343,21 @@ initializeEventHandlers = ->
                 sel.removeAllRanges()
                 sel.addRange range
 
+    $('#delete').on 'click', (event) ->
+        $active = $main.find 'tr.info'
+        return if $active.length == 0
+        stat = $active.data 'dropbox-stat'
+        if confirm "Do you really delete #{stat.name}?"
+            console.log 'pass'
+            spinner.spin document.body
+            dropbox.remove stat.path, (error, stat) ->
+                spinner.stop()
+                if error
+                    handleError error
+                else
+                    $fileModal.modal 'hide'
+                    getAndShowFolder config.currentFolder
+                    
 restoreConfig()
 initializeDropbox()
 initializeEventHandlers()

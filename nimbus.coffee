@@ -10,6 +10,7 @@
 
 API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
 dropbox = null
+directUrl = null
 currentStats = null
 config = null
 spinner = new Spinner()
@@ -244,6 +245,9 @@ onClickFileRow = (event) ->
                 dropbox.history stat.path, null, (error, stats) ->
                     spinner.stop()
                     makeHistoryList stats
+                directUrl = null
+                dropbox.makeUrl stat.path, download: true, (error, url) ->
+                    directUrl = url.url
             else
                 $main.find('tr').removeClass 'info'
                 $this.addClass 'info'
@@ -341,9 +345,13 @@ initializeEventHandlers = ->
                 sel.removeAllRanges()
                 sel.addRange range
 
+    $('#open').on 'click', (event) ->
+        $active = $main.find 'tr.info'
+        stat = $active.data 'dropbox-stat'
+        window.open directUrl if directUrl
+
     $('#delete').on 'click', (event) ->
         $active = $main.find 'tr.info'
-        return if $active.length == 0
         stat = $active.data 'dropbox-stat'
         if confirm "Do you really delete #{stat.name}?"
             spinner.spin document.body

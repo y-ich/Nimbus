@@ -18,6 +18,7 @@ spinner = new Spinner()
 $signInout = $('#sign-inout')
 $main = $('#main')
 $folderList = $('#footer .breadcrumb')
+$fileModal = $('#file-modal')
 
 # general functions
 
@@ -158,6 +159,27 @@ getAndShowFolder = (path = '/') ->
             currentStats = stats
             showFolder stats
 
+makeHistoryList = (stats) ->
+    ITEMS =
+        date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
+        size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
+
+    $div = $('<div class="touch-scrolling"><table class="table"></table></div>')
+    $table = $div.children()
+    
+    th = (key) -> "<th><span>#{key}</span></th>"
+    $table.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
+            
+    stats = stats.sort (a, b) -> b.modifiedAt.getTime() - a.modifiedAt.getTime()
+
+    for stat in stats
+        $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
+        $tr.data 'dropbox-stat', stat
+        $table.append $tr
+
+    $modalBody = $fileModal.find('.modal-body')
+    $modalBody.append $div
+
 restoreConfig = ->
     defaultConfig =
         currentFolder: '/'
@@ -208,14 +230,23 @@ initializeDropbox = ->
     catch error
         console.log error
 
-onClickFileRow = ->
+onClickFileRow = (event) ->
         $this =$(this)
         stat = $this.data('dropbox-stat')
         if not stat?
             return
         if stat.isFile
-            $main.find('tr').removeClass 'info'
-            $this.addClass 'info'
+            if $this.hasClass 'info'
+                $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
+                $fileModal.find('.modal-body').children().remove()
+                $fileModal.modal()
+                spinner.spin document.body
+                dropbox.history stat.path, null, (error, stats) ->
+                    spinner.stop()
+                    makeHistoryList stats
+            else
+                $main.find('tr').removeClass 'info'
+                $this.addClass 'info'
         else if stat.isFolder
             $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
             getAndShowFolder stat.path
@@ -249,6 +280,8 @@ initializeEventHandlers = ->
         localStorage['nimbus-config'] = JSON.stringify config
         false # prevent default
     
+    $main.on 'click', 'tr:first > th:not(:first)', ->
+
     $main.on 'click', 'tr:first > th:not(:first)', ->
         $this = $(this)
         if $this.hasClass 'ascending'
@@ -286,7 +319,29 @@ initializeEventHandlers = ->
                 handleError error
             else
                 getAndShowFolder config.currentFolder
-            
+
+    $('#share').on 'click', (event) ->
+        $active = $main.find 'tr.info'
+        return if $active.length == 0
+        stat = $active.data 'dropbox-stat'
+        spinner.spin document.body
+        dropbox.makeUrl stat.path, null, (error, url) ->
+            spinner.stop()
+            if error
+                handleError error
+            else
+                $active.popover
+                    placement: 'top'
+                    trigger: 'manual'
+                    title: 'Public URL'
+                    content: url.url
+                $active.popover 'show'
+                $content = $active.next().find('.popover-content')
+                range = document.createRange()
+                range.selectNodeContents $content[0]
+                sel = getSelection()
+                sel.removeAllRanges()
+                sel.addRange range
 
 restoreConfig()
 initializeDropbox()

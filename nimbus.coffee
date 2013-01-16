@@ -136,13 +136,22 @@ makeCoverFlow = (stats) ->
         coverwidth: 320
         height: $main.height()
         playlist: stats.map (stat) ->
-            "title": stat.name
-            "description": ''
-            "image": thumbnailUrl stat, 'l'
-            "link": ''
-            "duration": ''
+            play = 
+                "title": stat.name
+                "description": ''
+                "image": thumbnailUrl stat, 'l'
+                "link": ''
+                "duration": ''
+            dropbox.makeUrl stat.path, download: true, (error, url) ->
+                if error
+                    handleError error
+                else
+                    play.link = url.url
+            play
     coverflow('coverflow').setup(options).on 'ready', ->
-    
+        @on 'click', (index, link) ->
+            window.open link
+
 showFolder = (stats) ->
     if $('#view > button.active').val() is 'coverflow'
         makeCoverFlow stats

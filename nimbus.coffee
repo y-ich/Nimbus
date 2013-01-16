@@ -147,7 +147,7 @@ showFolder = (stats) ->
     else
         makeFileList stats, config.fileList.order, config.fileList.direction
     
-getAndShowFolder = (path = '/', coverflowOn = false) ->
+getAndShowFolder = (path = '/') ->
     spinner.spin document.body
     dropbox.readdir path, null, (error, names, stat, stats) ->
         spinner.stop()
@@ -237,7 +237,7 @@ initializeEventHandlers = ->
                 if error then handleError error else $this.button 'reset'
         spinner.spin document.body
 
-    $('#view > button').on 'click', -> setTimeout (-> showFolder currentStats), 0
+    $('#view > button').on 'click', -> setTimeout (-> showFolder currentStats), 0 # execute showFolder after radio processing.
 
     $folderList.on 'click', 'li:not(.active) > a', ->
         $this = $(this)
@@ -249,7 +249,7 @@ initializeEventHandlers = ->
         localStorage['nimbus-config'] = JSON.stringify config
         false # prevent default
     
-    $main.on 'click', 'tr > th:not(:first)', ->
+    $main.on 'click', 'tr:first > th:not(:first)', ->
         $this = $(this)
         if $this.hasClass 'ascending'
             config.fileList.direction = 'descending'
@@ -259,6 +259,18 @@ initializeEventHandlers = ->
             config.fileList.order = $this.children('span').text()
             config.fileList.direction = 'ascending'
         makeFileList currentStats, config.fileList.order, config.fileList.direction
+    
+    $('#menu-new-folder').on 'click', (event) ->
+        event.preventDefault()
+        name = prompt 'Folder Name'
+        if name and name isnt ''
+            spinner.spin document.body
+            dropbox.mkdir config.currentFolder + '/' + name, (error, stat) ->
+                spinner.stop()
+                if error
+                    handleError error
+                else
+                    getAndShowFolder config.currentFolder
 
 restoreConfig()
 initializeDropbox()

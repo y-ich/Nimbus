@@ -281,8 +281,6 @@ initializeEventHandlers = ->
         false # prevent default
     
     $main.on 'click', 'tr:first > th:not(:first)', ->
-
-    $main.on 'click', 'tr:first > th:not(:first)', ->
         $this = $(this)
         if $this.hasClass 'ascending'
             config.fileList.direction = 'descending'
@@ -348,7 +346,6 @@ initializeEventHandlers = ->
         return if $active.length == 0
         stat = $active.data 'dropbox-stat'
         if confirm "Do you really delete #{stat.name}?"
-            console.log 'pass'
             spinner.spin document.body
             dropbox.remove stat.path, (error, stat) ->
                 spinner.stop()
@@ -357,7 +354,30 @@ initializeEventHandlers = ->
                 else
                     $fileModal.modal 'hide'
                     getAndShowFolder config.currentFolder
-                    
+
+    $fileModal.on 'click', 'tr:gt(1)', (event) ->
+        $this =$(this)
+        $fileModal.find('tr').removeClass 'info'
+        $this.addClass 'info'
+
+    $('#revert').on 'click', (event) ->
+        $active = $fileModal.find('tr.info')
+        if $active.length == 0
+            alert 'select a previous version'
+            return
+        stat = $active.data 'dropbox-stat'
+        spinner.spin document.body
+        dropbox.revertFile stat.path, stat.versionTag, (error, stat) ->
+            spinner.stop()
+            if error
+                handleError error
+            else
+                spinner.spin document.body
+                dropbox.history stat.path, null, (error, stats) ->
+                    spinner.stop()
+                    $fileModal.find('.modal-body').children().remove()
+                    makeHistoryList stats
+                
 restoreConfig()
 initializeDropbox()
 initializeEventHandlers()

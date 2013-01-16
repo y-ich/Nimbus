@@ -12,7 +12,7 @@ API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
 dropbox = null
 currentStats = null
 config = null
-spinner = new Spinner color: '#fff'
+spinner = new Spinner()
 
 # view
 $signInout = $('#sign-inout')

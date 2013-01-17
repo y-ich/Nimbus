@@ -104,7 +104,7 @@ makeFileList = (stats, order, direction) ->
     $div = $('<div class="touch-scrolling"><table class="table"></table></div>')
     $table = $div.children()
     
-    th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}><span>#{key}</span></th>"
+    th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}#{if key is 'size' then ' style=\"text-align: right;\"' else ''}><span>#{key}</span></th>"
     $table.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
             
     sign = if direction is 'ascending' then 1 else -1

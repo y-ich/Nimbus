@@ -82,12 +82,33 @@ preview = (stat, link) ->
             spinner.spin document.body
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
                 jpeg = new JpegMeta.JpegFile string, stat.name
+                console.log jpeg
                 spinner.stop()
                 $viewer.children().remove()
-                $viewer.append "<div class=\"vertical-align\"><div><img src=\"data:image/jpeg;base64,#{btoa string}\" class=\"fit\" /></div></div>"
+                $viewer.append """
+                    <div class="vertical-align">
+                        <div>
+                            <img src="data:image/jpeg;base64,#{btoa string}" class="fit" />
+                        </div>
+                    </div>
+                    <button type="button" id="button-info" class="btn">
+                        <img src="images/glyphicons_195_circle_info.png" />
+                    </button>
+                    """
                 $viewer.fadeIn()
                 $viewer.find('img').on 'click', ->
                     $viewer.fadeOut()
+                $viewerModal = $('#viewer-modal')
+                $viewer.find('button').on 'click', ->
+                    $viewerModal.modal 'show'
+                $viewerModal.find('h3').text stat.name
+                $dl = $viewerModal.find('dl')
+                $dl.children().remove()
+                for key, value of jpeg.metaGroups
+                    for k, v of value when v instanceof JpegMeta.MetaProp
+                        $dl.append "<dt>#{v.description}</dt>"
+                        $dl.append "<dd>#{v.value}</dd>"
+                        
         when 'png', 'gif'
             $viewer.append "<div class=\"vertical-align\"><div><img src=\"#{link}\" class=\"fit\" /></div></div>"
             $viewer.fadeIn()

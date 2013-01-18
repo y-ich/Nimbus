@@ -22,6 +22,7 @@ $signInout = $('#sign-inout')
 $main = $('#main')
 $breadcrumbs = $('#footer .breadcrumb')
 $fileModal = $('#file-modal')
+$viewer = $('#viewer')
 $viewerModal = $('#viewer-modal')
 
 # general functions
@@ -172,36 +173,22 @@ prepareViewModal = (name, metaGroups) ->
     
 preview = (stat, link) ->
     ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 
-    $viewer = $('#viewer')
+    $viewer.css 'background-image', ''
     
     switch getExtension(stat.name).toLowerCase()
         when 'jpg', 'jpeg'
             spinner.spin document.body
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
                 spinner.stop()
-                $viewer.children().remove()
-                $viewer.append """
-                    <div class="vertical-align">
-                        <div>
-                            <img src="data:image/jpeg;base64,#{btoa string}" class="fit" />
-                        </div>
-                    </div>
-                    <button type="button" id="button-info" class="btn">
-                        <img src="images/glyphicons_195_circle_info.png" />
-                    </button>
-                    """
-                $viewer.fadeIn()
-                $viewer.find('img').on 'click', ->
-                    $viewer.fadeOut()
-                $viewer.find('button').on 'click', ->
-                    $viewerModal.modal 'show'
+                $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
                 jpeg = new JpegMeta.JpegFile string, stat.name
                 prepareViewModal stat.name, jpeg.metaGroups
+                $('#button-info').css 'dispay', ''
+                $viewer.fadeIn()
         when 'png', 'gif'
-            $viewer.append "<div class=\"vertical-align\"><div><img src=\"#{link}\" class=\"fit\" /></div></div>"
+            $viewer.css 'background-image', "url(\"#{link}\")"
+            $('#button-info').css 'dispay', 'none'
             $viewer.fadeIn()
-            $viewer.find('img').on 'click', ->
-                $viewer.fadeOut()
         else
             null
 
@@ -516,6 +503,14 @@ initializeEventHandlers = ->
                     spinner.stop()
                     $fileModal.find('.modal-body').children().remove()
                     makeHistoryList stats
+
+    $('#button-info').on 'click', (event) ->
+        event.stopPropagation() # prevent to click $viewer.
+        $viewerModal.modal 'show'
+
+    $viewer.on 'click', (event) ->
+        $viewer.fadeOut()
+
     $viewerModal.on 'shown', ->
         if maps?
             google.maps.event.trigger maps, 'resize' 

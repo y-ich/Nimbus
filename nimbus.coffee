@@ -74,6 +74,28 @@ handleError = (error) ->
             alert 'Sorry, there seems something wrong in software.'
 
 
+preview = (stat, link) ->
+    $viewer = $('#viewer')
+    
+    switch getExtension(stat.name).toLowerCase()
+        when 'jpg', 'jpeg'
+            spinner.spin document.body
+            dropbox.readFile stat.path, binary: true, (error, string, stat) ->
+                jpeg = new JpegMeta.JpegFile string, stat.name
+                spinner.stop()
+                $viewer.children().remove()
+                $viewer.append "<div class=\"vertical-align\"><div><img src=\"data:image/jpeg;base64,#{btoa string}\" class=\"fit\" /></div></div>"
+                $viewer.fadeIn()
+                $viewer.find('img').on 'click', ->
+                    $viewer.fadeOut()
+        when 'png', 'gif'
+            $viewer.append "<div class=\"vertical-align\"><div><img src=\"#{link}\" class=\"fit\" /></div></div>"
+            $viewer.fadeIn()
+            $viewer.find('img').on 'click', ->
+                $viewer.fadeOut()
+        else
+            null
+
 typeIcon48 = (typeIcon) ->
     switch typeIcon
         when 'page_white_excel' then 'excel48'
@@ -142,6 +164,7 @@ makeCoverFlow = (stats) ->
                 "image": thumbnailUrl stat, 'l'
                 "link": ''
                 "duration": ''
+                "stat": stat
             dropbox.makeUrl stat.path, download: true, (error, url) ->
                 if error
                     handleError error
@@ -150,7 +173,7 @@ makeCoverFlow = (stats) ->
             play
     coverflow('coverflow').setup(options).on 'ready', ->
         @on 'click', (index, link) ->
-            window.open link
+            preview @config.playlist[index].stat, link
 
 showFolder = (stats) ->
     if $('#view > button.active').val() is 'coverflow'
@@ -357,7 +380,8 @@ initializeEventHandlers = ->
     $('#open').on 'click', (event) ->
         $active = $main.find 'tr.info'
         stat = $active.data 'dropbox-stat'
-        window.open directUrl if directUrl
+        preview stat, directUrl
+        $fileModal.modal 'hide'
 
     $('#delete').on 'click', (event) ->
         $active = $main.find 'tr.info'

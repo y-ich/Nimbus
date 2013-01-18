@@ -14,12 +14,15 @@ directUrl = null
 currentStats = null
 config = null
 spinner = new Spinner()
+maps = null
+center = null
 
 # view
 $signInout = $('#sign-inout')
 $main = $('#main')
 $folderList = $('#footer .breadcrumb')
 $fileModal = $('#file-modal')
+$viewerModal = $('#viewer-modal')
 
 # general functions
 
@@ -81,9 +84,8 @@ preview = (stat, link) ->
         when 'jpg', 'jpeg'
             spinner.spin document.body
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
-                jpeg = new JpegMeta.JpegFile string, stat.name
-                console.log jpeg
                 spinner.stop()
+                jpeg = new JpegMeta.JpegFile string, stat.name
                 $viewer.children().remove()
                 $viewer.append """
                     <div class="vertical-align">
@@ -98,10 +100,25 @@ preview = (stat, link) ->
                 $viewer.fadeIn()
                 $viewer.find('img').on 'click', ->
                     $viewer.fadeOut()
-                $viewerModal = $('#viewer-modal')
                 $viewer.find('button').on 'click', ->
+                    console.log 'pass'
                     $viewerModal.modal 'show'
                 $viewerModal.find('h3').text stat.name
+                if jpeg.gps?
+                    $('#google-maps').css 'display', ''
+                    center = new google.maps.LatLng jpeg.gps.latitude.value, jpeg.gps.longitude.value
+                    if maps?
+                        maps.setCenter center
+                    else
+                        maps = new google.maps.Map $('#google-maps')[0], 
+                            zoom: 8
+                            center: center
+                            mapTypeId: google.maps.MapTypeId.ROADMAP
+                        marker = new google.maps.Marker
+                            map: maps
+                            position: center
+                else
+                    $('#google-maps').css 'display', 'none'
                 $dl = $viewerModal.find('dl')
                 $dl.children().remove()
                 for key, value of jpeg.metaGroups
@@ -439,7 +456,11 @@ initializeEventHandlers = ->
                     spinner.stop()
                     $fileModal.find('.modal-body').children().remove()
                     makeHistoryList stats
-                
+    $viewerModal.on 'shown', ->
+        if maps?
+            google.maps.event.trigger maps, 'resize' 
+            maps.setCenter center
+
 restoreConfig()
 initializeDropbox()
 initializeEventHandlers()

@@ -134,16 +134,21 @@ thumbnailUrl = (stat, size = 'small') ->
 
 # utility functions for app
 
-restoreConfig = ->
-    ### restores configuration ###
-    defaultConfig =
-        currentFolder: '/'
-        fileList:
-            order: 'name'
-            direction: 'ascending'
-    config = JSON.parse localStorage['nimbus-config'] ? '{}'
-    for key, value of defaultConfig
-        config[key] ?= value
+class PersistentObject
+    @restore: (key, defaultValue = {}) ->
+        restored = JSON.parse localStorage[key] ? '{}'
+        for key, value of defaultValue
+            restored[key] ?= value
+        new PersistentObject key, restored
+
+    constructor: (@key, @object) ->
+        localStorage[@key] = JSON.stringify @object
+
+    get: (key) -> @object[key]
+
+    set: (key, value) ->
+        @object[key] = value
+        localStorage[@key] = JSON.stringify @object
 
 # DOM manupulations
 
@@ -259,7 +264,7 @@ showFolder = (stats) ->
     if $('#view > button.active').val() is 'coverflow'
         makeCoverFlow stats
     else
-        makeFileList stats, config.fileList.order, config.fileList.direction
+        makeFileList stats, config.get('fileList').order, config.get('fileList').direction
     
 getAndShowFolder = (path = '/') ->
     ### gets and shows folder content. ###
@@ -333,7 +338,7 @@ initializeDropbox = ->
                     $signInout.button 'reset'
                 else
                     $signInout.button 'signout'
-                    getAndShowFolder config.currentFolder
+                    getAndShowFolder config.get 'currentFolder'
             break
     catch error
         console.log error
@@ -362,8 +367,7 @@ onClickFileRow = (event) ->
     else if stat.isFolder
         $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
         getAndShowFolder stat.path
-        config.currentFolder = stat.path
-        localStorage['nimbus-config'] = JSON.stringify config
+        config.set 'currentFolder', stat.path
 
 initializeEventHandlers = ->
     ### sets event handlers ###
@@ -398,19 +402,15 @@ initializeEventHandlers = ->
         $this.parent().addClass 'active'
         path = $this.data 'path'
         getAndShowFolder path
-        config.currentFolder = path
-        localStorage['nimbus-config'] = JSON.stringify config
+        config.set 'currentFolder', path
     
     $main.on 'click', 'tr:first > th:not(:first)', ->
         $this = $(this)
-        if $this.hasClass 'ascending'
-            config.fileList.direction = 'descending'
-        else if $this.hasClass 'descending'
-            config.fileList.direction = 'ascending'
-        else
-            config.fileList.order = $this.children('span').text()
-            config.fileList.direction = 'ascending'
-        makeFileList currentStats, config.fileList.order, config.fileList.direction
+        orderAndDirection = 
+            order: $this.children('span').text()
+            direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
+        config.set 'fileList', orderAndDirection            
+        makeFileList currentStats, orderAndDirection.order, orderAndDirection.direction
     
     $('#menu-new-folder').on 'click', (event) ->
         event.preventDefault()
@@ -418,12 +418,12 @@ initializeEventHandlers = ->
         return unless name and name isnt ''
 
         spinner.spin document.body
-        dropbox.mkdir config.currentFolder + '/' + name, (error, stat) ->
+        dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
             spinner.stop()
             if error
                 handleDropboxError error
             else
-                getAndShowFolder config.currentFolder
+                getAndShowFolder config.get 'currentFolder'
 
     $('#menu-upload').on 'click', (event) ->
         event.preventDefault()
@@ -432,12 +432,12 @@ initializeEventHandlers = ->
     $('#file-picker').on 'change', (event) ->
         file = event.target.files[0]
         spinner.spin document.body
-        dropbox.writeFile config.currentFolder + '/' + file.name, file, null, (error, stat) ->
+        dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
             spinner.stop()
             if error
                 handleDropboxError error
             else
-                getAndShowFolder config.currentFolder
+                getAndShowFolder config.get 'currentFolder'
 
     $('#share').on 'click', (event) ->
         $active = $main.find 'tr.info'
@@ -479,7 +479,7 @@ initializeEventHandlers = ->
                     handleDropboxError error
                 else
                     $fileModal.modal 'hide'
-                    getAndShowFolder config.currentFolder
+                    getAndShowFolder config.get 'currentFolder'
 
     $fileModal.on 'click', 'tr:gt(1)', (event) ->
         $this =$(this)
@@ -516,6 +516,10 @@ initializeEventHandlers = ->
             google.maps.event.trigger maps, 'resize' 
             maps.setCenter center
 
-restoreConfig()
+config = PersistentObject.restore 'nimbus-config',
+    currentFolder: '/'
+    fileList:
+        order: 'name'
+        direction: 'ascending'
 initializeDropbox()
 initializeEventHandlers()

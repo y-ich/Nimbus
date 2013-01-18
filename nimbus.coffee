@@ -20,13 +20,17 @@ center = null
 # view
 $signInout = $('#sign-inout')
 $main = $('#main')
-$folderList = $('#footer .breadcrumb')
+$breadcrumbs = $('#footer .breadcrumb')
 $fileModal = $('#file-modal')
 $viewerModal = $('#viewer-modal')
 
 # general functions
 
 compareString = (str1, str2) ->
+    ###
+    returns 1, 0, -1 according to the order of str1 and str2.
+    It is for Array#sort method.
+    ###
     if str1 > str2
         1
     else if str1 < str2
@@ -34,9 +38,17 @@ compareString = (str1, str2) ->
     else
         0
 
-dateString = (date) -> date.toDateString().replace(/^.*? /, '') + ' ' + date.toTimeString().replace(/GMT.*$/, '')
+dateString = (date) ->
+    ###
+    returns formated string of date.
+    example: Jan 18 2013 15:53:51 (JST)
+    ###
+    date.toString().replace /^.*? |GMT.* /g, ''
 
 byteString = (n) ->
+    ###
+    returns formated string of number as bytes.
+    ###
     if n < 1000
         n.toString() + 'B'
     else if n < 1000000
@@ -46,38 +58,120 @@ byteString = (n) ->
     else if n < 1000000000000
         Math.floor(n / 1000000000).toString() + 'GB'
 
-getExtension = (path) -> if /\./.test path then path.replace /^.*\./, '' else ''
+getExtension = (path) ->
+    ### returns extention in path. ###
+    if /\./.test path then path.replace /^.*\./, '' else ''
 
-# '/' => ['']
-# '/a/b/c' => ['', '/a', '/a/b', '/a/b/c']
+isJpegFile = (name) ->
+    ### judges whether JPEG or not by file name extension. ###
+    ['jpg', 'jpeg'].indexOf(getExtension(name).toLowerCase()) >= 0
+
 ancestorFolders = (path) ->
-    return [''] if path is '/'
-    split = path.split '/'
-    split[0..i].join '/' for e, i in split
+    ###
+    returns an array with ancestor folders of path.
+    examples:
+        '/' => ['']
+        '/a/b/c' => ['', '/a', '/a/b', '/a/b/c']
+    ###
+    if path is '/'
+        [''] 
+    else
+        split = path.split '/'
+        split[0..i].join '/' for e, i in split
 
-handleError = (error) ->
+# utility functions for Dropbox
+
+handleDropboxError = (error) ->
+    ### notifies Dropbox error to user. ###
     console.error error if (window.console)
     switch error.status
+        when 400
+            alert 'Sorry, there seems something wrong in software.'
+            console.error 'Bad input parameter'
         when 401
             alert 'Authentication is expired. Please sign-in again.'
             $signInout.button 'reset'
+        when 403
+            alert 'Sorry, there seems something wrong in software.'
+            console.error 'Bad OAuth request'
         when 404
-            alert 'No such file or folder.'
+            alert 'Sorry, there seems something wrong in software.'
+            console.error 'No such file or folder.'
+        when 405
+            alert 'Sorry, there seems something wrong in software.'
+            console.error 'Request method not expected.'
         when 507
             alert 'Your Dropbox seems full.'
         when 503
             alert 'Dropbox seems busy. Please try again later.'
-        when 400
-            alert 'Bad input parameter.'
-        when 403  
-            alert 'Please sign-in at first.'
-        when 405
-            alert 'Request method not expected.'
         else
             alert 'Sorry, there seems something wrong in software.'
+            if 500 <= error.status > 600
+                console.error 'Server error'
+            else
+                console.error 'unknown error'
 
+typeIcon48 = (typeIcon) ->
+    ### returns a name of icon for 48px. ###
+    switch typeIcon
+        when 'page_white_excel' then 'excel48'
+        when 'page_white_film' then 'page_white_dvd'
+        when 'page_white_powerpoint' then 'powerpoint48'
+        when 'page_white_word' then 'word48'
+        when 'page_white_sound' then 'music48'
+        when 'page_white_compressed' then 'page_white_zip48'
+        else typeIcon + '48'
 
+thumbnailUrl = (stat, size = 'small') ->
+    ### returns thumbnail URL or 48x48 icon URL if no thumbnail. ###
+    if stat.hasThumbnail
+        dropbox.thumbnailUrl stat.path,
+            png: not isJpegFile stat.name
+            size: size
+    else
+        "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
+
+# utility functions for app
+
+restoreConfig = ->
+    ### restores configuration ###
+    defaultConfig =
+        currentFolder: '/'
+        fileList:
+            order: 'name'
+            direction: 'ascending'
+    config = JSON.parse localStorage['nimbus-config'] ? '{}'
+    for key, value of defaultConfig
+        config[key] ?= value
+
+# DOM manupulations
+
+prepareViewModal = (name, metaGroups) ->
+    $viewerModal.find('h3').text name
+    if metaGroups.gps?
+        $('#google-maps').css 'display', ''
+        center = new google.maps.LatLng metaGroups.gps.latitude.value, metaGroups.gps.longitude.value
+        if maps?
+            maps.setCenter center
+        else
+            maps = new google.maps.Map $('#google-maps')[0], 
+                zoom: 8
+                center: center
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            marker = new google.maps.Marker
+                map: maps
+                position: center
+    else
+        $('#google-maps').css 'display', 'none'
+    $dl = $viewerModal.find('dl')
+    $dl.children().remove()
+    for key, value of metaGroups
+        for k, v of value when v instanceof JpegMeta.MetaProp
+            $dl.append "<dt>#{v.description}</dt>"
+            $dl.append "<dd>#{v.value}</dd>"
+    
 preview = (stat, link) ->
+    ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 
     $viewer = $('#viewer')
     
     switch getExtension(stat.name).toLowerCase()
@@ -85,7 +179,6 @@ preview = (stat, link) ->
             spinner.spin document.body
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
                 spinner.stop()
-                jpeg = new JpegMeta.JpegFile string, stat.name
                 $viewer.children().remove()
                 $viewer.append """
                     <div class="vertical-align">
@@ -101,31 +194,9 @@ preview = (stat, link) ->
                 $viewer.find('img').on 'click', ->
                     $viewer.fadeOut()
                 $viewer.find('button').on 'click', ->
-                    console.log 'pass'
                     $viewerModal.modal 'show'
-                $viewerModal.find('h3').text stat.name
-                if jpeg.gps?
-                    $('#google-maps').css 'display', ''
-                    center = new google.maps.LatLng jpeg.gps.latitude.value, jpeg.gps.longitude.value
-                    if maps?
-                        maps.setCenter center
-                    else
-                        maps = new google.maps.Map $('#google-maps')[0], 
-                            zoom: 8
-                            center: center
-                            mapTypeId: google.maps.MapTypeId.ROADMAP
-                        marker = new google.maps.Marker
-                            map: maps
-                            position: center
-                else
-                    $('#google-maps').css 'display', 'none'
-                $dl = $viewerModal.find('dl')
-                $dl.children().remove()
-                for key, value of jpeg.metaGroups
-                    for k, v of value when v instanceof JpegMeta.MetaProp
-                        $dl.append "<dt>#{v.description}</dt>"
-                        $dl.append "<dd>#{v.value}</dd>"
-                        
+                jpeg = new JpegMeta.JpegFile string, stat.name
+                prepareViewModal stat.name, jpeg.metaGroups
         when 'png', 'gif'
             $viewer.append "<div class=\"vertical-align\"><div><img src=\"#{link}\" class=\"fit\" /></div></div>"
             $viewer.fadeIn()
@@ -134,26 +205,8 @@ preview = (stat, link) ->
         else
             null
 
-typeIcon48 = (typeIcon) ->
-    switch typeIcon
-        when 'page_white_excel' then 'excel48'
-        when 'page_white_film' then 'page_white_dvd'
-        when 'page_white_powerpoint' then 'powerpoint48'
-        when 'page_white_word' then 'word48'
-        when 'page_white_sound' then 'music48'
-        when 'page_white_compressed' then 'page_white_zip48'
-        else typeIcon + '48'
-
-thumbnailUrl = (stat, size = 'small') ->
-    if stat.hasThumbnail
-        extension = getExtension stat.name
-        dropbox.thumbnailUrl stat.path,
-            png: not (extension is 'jpg' or extension is 'jpeg')
-            size: size
-    else
-        "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
-
 makeFileList = (stats, order, direction) ->
+    ### prepares file list. ###
     ITEMS =
         image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
         name: (stat) -> "<td>#{stat.name}</td>"
@@ -189,6 +242,7 @@ makeFileList = (stats, order, direction) ->
     $table.on 'click', 'tr', onClickFileRow # enable to click.
 
 makeCoverFlow = (stats) ->
+    ### prepares cover flow. ###
     $main.children().remove()
     $main.append '<div id="coverflow"></div>'
     options =
@@ -205,7 +259,7 @@ makeCoverFlow = (stats) ->
                 "stat": stat
             dropbox.makeUrl stat.path, download: true, (error, url) ->
                 if error
-                    handleError error
+                    handleDropboxError error
                 else
                     play.link = url.url
             play
@@ -214,23 +268,26 @@ makeCoverFlow = (stats) ->
             preview @config.playlist[index].stat, link
 
 showFolder = (stats) ->
+    ### prepares file list or cover flow. ###
     if $('#view > button.active').val() is 'coverflow'
         makeCoverFlow stats
     else
         makeFileList stats, config.fileList.order, config.fileList.direction
     
 getAndShowFolder = (path = '/') ->
+    ### gets and shows folder content. ###
     spinner.spin document.body
     dropbox.readdir path, null, (error, names, stat, stats) ->
         spinner.stop()
         if error
-            handleError error
+            handleDropboxError error
         else
             updateFolderList path
             currentStats = stats
             showFolder stats
 
 makeHistoryList = (stats) ->
+    ### prepares file history list. ###
     ITEMS =
         date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
         size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
@@ -251,35 +308,28 @@ makeHistoryList = (stats) ->
     $modalBody = $fileModal.find('.modal-body')
     $modalBody.append $div
 
-restoreConfig = ->
-    defaultConfig =
-        currentFolder: '/'
-        fileList:
-            order: 'name'
-            direction: 'ascending'
-    config = JSON.parse localStorage['nimbus-config'] ? '{}'
-    for key, value of defaultConfig
-        config[key] ?= value
-
 updateFolderList = (path) ->
-    $folderList.children().remove()
+    ### udpates breadcrumb of folder path. ###
+    $breadcrumbs.children().remove()
     for e, i in ancestorFolders path
         if i == 0
-            $folderList.append '<li><a href="#" data-path="/">Home</a></li>'
+            $breadcrumbs.append '<li><a href="#" data-path="/">Home</a></li>'
         else
             name = e.replace /^.*\//, ''
-            $folderList.append """
+            $breadcrumbs.append """
                 <li>
                     <span class="divider">/</span>
                     <a href="#" data-path="#{e}">#{name}</a>
                 </li>
                 """
-    $folderList.children('li:last-child').addClass 'active'
+    $breadcrumbs.children('li:last-child').addClass 'active'
 
-# 1. prepares Dropbox Client instance.
-# 2. checks URL. if it includes not_approved=true, a user rejected authentication request. Does nothing.
-# 3. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
 initializeDropbox = ->
+    ###
+    1. prepares Dropbox Client instance.
+    2. checks URL. if it includes not_approved=true, a user rejected authentication request. Does nothing.
+    3. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
+    ###
     dropbox = new Dropbox.Client
         key: API_KEY
         sandbox: false
@@ -292,7 +342,7 @@ initializeDropbox = ->
             $signInout.button 'loading'
             dropbox.authenticate (error, client) ->
                 if error
-                    handleError error 
+                    handleDropboxError error 
                     $signInout.button 'reset'
                 else
                     $signInout.button 'signout'
@@ -302,57 +352,67 @@ initializeDropbox = ->
         console.log error
 
 onClickFileRow = (event) ->
-        $this =$(this)
-        stat = $this.data('dropbox-stat')
-        if not stat?
-            return
-        if stat.isFile
-            if $this.hasClass 'info'
-                $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
-                $fileModal.find('.modal-body').children().remove()
-                $fileModal.modal()
-                spinner.spin document.body
-                dropbox.history stat.path, null, (error, stats) ->
-                    spinner.stop()
-                    makeHistoryList stats
-                directUrl = null
-                dropbox.makeUrl stat.path, download: true, (error, url) ->
-                    directUrl = url.url
-            else
-                $main.find('tr').removeClass 'info'
-                $this.addClass 'info'
-        else if stat.isFolder
-            $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
-            getAndShowFolder stat.path
-            config.currentFolder = stat.path
-            localStorage['nimbus-config'] = JSON.stringify config
+    ### event handler for file list. ###
+    $this =$(this)
+    stat = $this.data('dropbox-stat')
+    if not stat?
+        return
+    if stat.isFile
+        if $this.hasClass 'info'
+            $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
+            $fileModal.find('.modal-body').children().remove()
+            $fileModal.modal()
+            spinner.spin document.body
+            dropbox.history stat.path, null, (error, stats) ->
+                spinner.stop()
+                makeHistoryList stats
+            directUrl = null
+            dropbox.makeUrl stat.path, download: true, (error, url) ->
+                directUrl = url.url
+        else
+            $main.find('tr').removeClass 'info'
+            $this.addClass 'info'
+    else if stat.isFolder
+        $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
+        getAndShowFolder stat.path
+        config.currentFolder = stat.path
+        localStorage['nimbus-config'] = JSON.stringify config
 
 initializeEventHandlers = ->
+    ### sets event handlers ###
+    # dropbox sign in button
     $signInout.on 'click', ->
-        $this = $(this)
-        if $this.text() is 'sign-in'
-            $this.button 'loading'
+        spinner.spin document.body
+        if $signInout.text() is 'sign-in'
+            $signInout.button 'loading'
             dropbox.reset()
             dropbox.authenticate (error, client) ->
                 spinner.stop()
-                if error then handleError error else $this.button 'signout'
+                if error
+                    handleDropboxError error
+                else
+                    $signInout.button 'signout'
         else
             dropbox.signOut (error) ->
                 spinner.stop()
-                if error then handleError error else $this.button 'reset'
-        spinner.spin document.body
+                if error
+                    handleDropboxError error
+                else
+                    $signInout.button 'reset'
 
-    $('#view > button').on 'click', -> setTimeout (-> showFolder currentStats), 0 # execute showFolder after radio processing.
+    $('#radio-view > button').on 'click', ->
+        # execute showFolder after radio button processing.
+        setTimeout (-> showFolder currentStats), 0
 
-    $folderList.on 'click', 'li:not(.active) > a', ->
+    $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
+        event.preventDefault()
         $this = $(this)
-        $this.parent().nextUntil().remove()
+        $this.parent().nextUntil().remove() # removes descendent folders.
         $this.parent().addClass 'active'
         path = $this.data 'path'
         getAndShowFolder path
         config.currentFolder = path
         localStorage['nimbus-config'] = JSON.stringify config
-        false # prevent default
     
     $main.on 'click', 'tr:first > th:not(:first)', ->
         $this = $(this)
@@ -374,7 +434,7 @@ initializeEventHandlers = ->
         dropbox.mkdir config.currentFolder + '/' + name, (error, stat) ->
             spinner.stop()
             if error
-                handleError error
+                handleDropboxError error
             else
                 getAndShowFolder config.currentFolder
 
@@ -388,7 +448,7 @@ initializeEventHandlers = ->
         dropbox.writeFile config.currentFolder + '/' + file.name, file, null, (error, stat) ->
             spinner.stop()
             if error
-                handleError error
+                handleDropboxError error
             else
                 getAndShowFolder config.currentFolder
 
@@ -400,7 +460,7 @@ initializeEventHandlers = ->
         dropbox.makeUrl stat.path, null, (error, url) ->
             spinner.stop()
             if error
-                handleError error
+                handleDropboxError error
             else
                 $active.popover
                     placement: 'top'
@@ -429,7 +489,7 @@ initializeEventHandlers = ->
             dropbox.remove stat.path, (error, stat) ->
                 spinner.stop()
                 if error
-                    handleError error
+                    handleDropboxError error
                 else
                     $fileModal.modal 'hide'
                     getAndShowFolder config.currentFolder
@@ -449,7 +509,7 @@ initializeEventHandlers = ->
         dropbox.revertFile stat.path, stat.versionTag, (error, stat) ->
             spinner.stop()
             if error
-                handleError error
+                handleDropboxError error
             else
                 spinner.spin document.body
                 dropbox.history stat.path, null, (error, stats) ->

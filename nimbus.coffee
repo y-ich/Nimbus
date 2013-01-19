@@ -82,8 +82,9 @@ ancestorFolders = (path) ->
 
 # utility functions for Dropbox
 
-handleDropboxError = (error) ->
+handleDropboxError = (error, path = null) ->
     ### notifies Dropbox error to user. ###
+    console.log path if path?
     console.error error if (window.console)
     switch error.status
         when 400
@@ -239,7 +240,6 @@ makeCoverFlow = (stats) ->
     ### prepares cover flow. ###
     $main.children().remove()
     $main.append '<div id="coverflow"></div>'
-    console.log stats
     options =
         width: '100%'
         coverwidth: 320
@@ -253,11 +253,12 @@ makeCoverFlow = (stats) ->
                 "duration": ''
                 "stat": stat
             if stat.isFile
-                dropbox.makeUrl stat.path, download: true, (error, url) ->
-                    if error
-                        handleDropboxError error
-                    else
-                        play.link = url.url
+                unless /~$/.test stat.name # You can not make URL for backup file (ex. .txt~). (403 forbidden)
+                    dropbox.makeUrl stat.path, download: true, (error, url) ->
+                        if error
+                            handleDropboxError error, stat.path
+                        else
+                            play.link = url.url
             play
     coverflow('coverflow').setup(options).on 'ready', ->
         @on 'click', (index, link) ->

@@ -132,13 +132,13 @@ thumbnailUrl = (stat, size = 'small') ->
     else
         "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
 
-# utility functions for app
+# utility classes for app
 
 class PersistentObject
     @restore: (key, defaultValue = {}) ->
         restored = JSON.parse localStorage[key] ? '{}'
-        for key, value of defaultValue
-            restored[key] ?= value
+        for k, v of defaultValue
+            restored[k] ?= v
         new PersistentObject key, restored
 
     constructor: (@key, @object) ->
@@ -148,6 +148,8 @@ class PersistentObject
 
     set: (key, value) ->
         @object[key] = value
+        console.log JSON.stringify @object
+        console.log @key
         localStorage[@key] = JSON.stringify @object
 
 # DOM manupulations
@@ -247,18 +249,19 @@ makeCoverFlow = (stats) ->
                 "title": stat.name
                 "description": ''
                 "image": thumbnailUrl stat, 'l'
-                "link": ''
+                "link": null
                 "duration": ''
                 "stat": stat
-            dropbox.makeUrl stat.path, download: true, (error, url) ->
-                if error
-                    handleDropboxError error
-                else
-                    play.link = url.url
+            if stat.isFile
+                dropbox.makeUrl stat.path, download: true, (error, url) ->
+                    if error
+                        handleDropboxError error
+                    else
+                        play.link = url.url
             play
     coverflow('coverflow').setup(options).on 'ready', ->
         @on 'click', (index, link) ->
-            preview @config.playlist[index].stat, link
+            preview @config.playlist[index].stat, link if link?
 
 showFolder = (stats) ->
     ### prepares file list or cover flow. ###

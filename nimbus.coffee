@@ -13,17 +13,17 @@ dropbox = null
 directUrl = null
 currentStats = null
 config = null
-spinner = new Spinner()
+spinner = null
 maps = null
 center = null
 
 # view
-$signInout = $('#sign-inout')
-$main = $('#main')
-$breadcrumbs = $('#footer .breadcrumb')
-$fileModal = $('#file-modal')
-$viewer = $('#viewer')
-$viewerModal = $('#viewer-modal')
+$signInout = null
+$main = null
+$breadcrumbs = null
+$fileModal = null
+$viewer = null
+$viewerModal = null
 
 # general functions
 
@@ -237,6 +237,7 @@ makeCoverFlow = (stats) ->
     ### prepares cover flow. ###
     $main.children().remove()
     $main.append '<div id="coverflow"></div>'
+    console.log stats
     options =
         width: '100%'
         coverwidth: 320
@@ -261,7 +262,7 @@ makeCoverFlow = (stats) ->
 
 showFolder = (stats) ->
     ### prepares file list or cover flow. ###
-    if $('#view > button.active').val() is 'coverflow'
+    if $('#radio-view > button.active').val() is 'coverflow'
         makeCoverFlow stats
     else
         makeFileList stats, config.get('fileList').order, config.get('fileList').direction
@@ -318,10 +319,12 @@ updateBreadcrumbs = (path) ->
 
 initializeDropbox = ->
     ###
+    0. disable Dropbox related buttons.
     1. prepares Dropbox Client instance.
     2. checks URL. if it includes not_approved=true, a user rejected authentication request. Does nothing.
     3. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
     ###
+    $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
     dropbox = new Dropbox.Client
         key: API_KEY
         sandbox: false
@@ -338,6 +341,7 @@ initializeDropbox = ->
                     $signInout.button 'reset'
                 else
                     $signInout.button 'signout'
+                    $('#header button:not(#sign-inout)').removeAttr 'disabled'
                     getAndShowFolder config.get 'currentFolder'
             break
     catch error
@@ -383,6 +387,7 @@ initializeEventHandlers = ->
                     handleDropboxError error
                 else
                     $signInout.button 'signout'
+                    $('#header button:not(#sign-inout)').removeAttr 'disabled'
         else
             dropbox.signOut (error) ->
                 spinner.stop()
@@ -390,10 +395,11 @@ initializeEventHandlers = ->
                     handleDropboxError error
                 else
                     $signInout.button 'reset'
+                    $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
 
     $('#radio-view > button').on 'click', ->
         # execute showFolder after radio button processing.
-        setTimeout (-> showFolder currentStats), 0
+        setTimeout (-> showFolder currentStats), 0 if currentStats? # currentStats may be null in early stage.
 
     $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
         event.preventDefault()
@@ -516,10 +522,20 @@ initializeEventHandlers = ->
             google.maps.event.trigger maps, 'resize' 
             maps.setCenter center
 
-config = PersistentObject.restore 'nimbus-config',
-    currentFolder: '/'
-    fileList:
-        order: 'name'
-        direction: 'ascending'
-initializeDropbox()
-initializeEventHandlers()
+# main
+unless jasmine?
+    spinner = new Spinner()
+    $signInout = $('#sign-inout')
+    $main = $('#main')
+    $breadcrumbs = $('#footer .breadcrumb')
+    $fileModal = $('#file-modal')
+    $viewer = $('#viewer')
+    $viewerModal = $('#viewer-modal')
+
+    config = PersistentObject.restore 'nimbus-config',
+        currentFolder: '/'
+        fileList:
+            order: 'name'
+            direction: 'ascending'
+    initializeDropbox()
+    initializeEventHandlers()

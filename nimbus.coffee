@@ -274,7 +274,7 @@ getAndShowFolder = (path = '/') ->
         if error
             handleDropboxError error
         else
-            updateFolderList path
+            updateBreadcrumbs path
             currentStats = stats
             showFolder stats
 
@@ -300,7 +300,7 @@ makeHistoryList = (stats) ->
     $modalBody = $fileModal.find('.modal-body')
     $modalBody.append $div
 
-updateFolderList = (path) ->
+updateBreadcrumbs = (path) ->
     ### udpates breadcrumb of folder path. ###
     $breadcrumbs.children().remove()
     for e, i in ancestorFolders path

@@ -133,6 +133,18 @@ thumbnailUrl = (stat, size = 'small') ->
     else
         "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
 
+compareStatBy = (order, direction) ->
+    sign = if direction is 'ascending' then 1 else -1
+    switch order
+        when 'name'
+            (a, b) -> sign * compareString a.name.toLowerCase(), b.name.toLowerCase()
+        when 'kind'
+            (a, b) -> sign * compareString getExtension(a.name).toLowerCase(), getExtension(b.name).toLowerCase()
+        when 'date'
+            (a, b) -> sign * (a.modifiedAt.getTime() - b.modifiedAt.getTime())
+        when 'size'
+            (a, b) -> sign * (a.size - b.size)        
+
 # utility classes for app
 
 class PersistentObject
@@ -213,17 +225,7 @@ makeFileList = (stats, order, direction) ->
     th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}#{if key is 'size' then ' style=\"text-align: right;\"' else ''}><span>#{key}</span></th>"
     $table.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
             
-    sign = if direction is 'ascending' then 1 else -1
-    sortFunc = switch order
-            when 'name'
-                (a, b) -> sign * compareString a.name.toLowerCase(), b.name.toLowerCase()
-            when 'kind'
-                (a, b) -> sign * compareString getExtension(a.name).toLowerCase(), getExtension(b.name).toLowerCase()
-            when 'date'
-                (a, b) -> sign * (a.modifiedAt.getTime() - b.modifiedAt.getTime())
-            when 'size'
-                (a, b) -> sign * (a.size - b.size)        
-    stats = stats.sort sortFunc
+    stats = stats.sort compareStatBy order, direction
 
     for stat in stats
         $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
@@ -234,22 +236,12 @@ makeFileList = (stats, order, direction) ->
     $main.append $div
     $table.on 'click', 'tr', onClickFileRow # enable to click.
 
-resortFileList = (order, direction) ->
+sortFileList = (order, direction) ->
     ### sorts file list. ###
-    sign = if direction is 'ascending' then 1 else -1
-    sortFunc = switch order
-            when 'name'
-                (a, b) -> sign * compareString a.name.toLowerCase(), b.name.toLowerCase()
-            when 'kind'
-                (a, b) -> sign * compareString getExtension(a.name).toLowerCase(), getExtension(b.name).toLowerCase()
-            when 'date'
-                (a, b) -> sign * (a.modifiedAt.getTime() - b.modifiedAt.getTime())
-            when 'size'
-                (a, b) -> sign * (a.size - b.size)        
 
     $trs = $main.find('table tr:not(:first)')
     $trs.sort (a, b) ->
-        sortFunc $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
+        compareStatBy(order, direction)($(a).data('dropbox-stat'), $(b).data('dropbox-stat'))
     $trs.detach()
     $trs.appendTo $main.find('table > tbody')
     for className in ['ascending', 'descending']
@@ -444,7 +436,7 @@ initializeEventHandlers = ->
             order: $this.children('span').text()
             direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
         config.set 'fileList', orderAndDirection            
-        resortFileList orderAndDirection.order, orderAndDirection.direction
+        sortFileList orderAndDirection.order, orderAndDirection.direction
     
     $('#menu-new-folder').on 'click', (event) ->
         event.preventDefault()

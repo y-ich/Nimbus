@@ -147,6 +147,49 @@ compareStatBy = (order, direction) ->
         when 'size'
             (a, b) -> sign * (a.size - b.size)        
 
+exifDate2Date = (str) ->
+    new Date Date.parse str.replace(/^(\d+):(\d+):(\d+)/, '$1/$2/$3') + ' UTC'
+
+# service interfaces
+obj2query = (obj) ->
+    (encodeURIComponent(key) + '=' + encodeURIComponent(value) for key, value of obj).join '&'
+
+flickrSearch = (param) ->
+    param.api_key  = 'deab42733a35afe10cee60d4daeed7c6'
+    param.method   = 'flickr.photos.search'
+    param.per_page = 500
+    param.format   = 'json'
+    param.jsoncallback = 'flickrHandler'
+
+    $(document.body).append "<script id=\"script-flickr\" src=\"http://www.flickr.com/services/rest/?#{obj2query param}\"></script>"
+
+window.flickrHandler = (data) ->
+    return if data.stat is 'fail'
+    photos = data.photos.photo
+    console.log photos.length
+    for i in [0...photos.length]
+        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
+    $('#script-flickr').remove()
+
+panoramioSearch = (param) ->
+    query =
+        set: 'full'
+        from: 0
+        to: 99
+        size: 'thumbnail'
+        mapfilter: false
+        callback: 'panoramioHandler'
+    param[key] ?= value for key, value of query
+    $(document.body).append "<script id=\"script-panoramio\" src=\"http://www.panoramio.com/map/get_panoramas.php?#{obj2query param}\"></script>"
+
+window.panoramioHandler = (data) ->
+    photos = data.photos
+    console.log photos
+    for i in [0...photos.length]
+        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
+    $('#script-panoramio').remove()
+
+
 # utility classes for app
 
 class PersistentObject
@@ -182,8 +225,36 @@ prepareViewModal = (name, metaGroups) ->
             marker = new google.maps.Marker
                 map: maps
                 position: center
+
+        if metaGroups.exif?.DateTimeOriginal?.value?
+            date = exifDate2Date metaGroups.exif.DateTimeOriginal.value
+            flickrSearch
+                ###
+                min_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0) / 1000
+                max_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 99) / 1000
+                ###
+                has_geo: 1
+                lat: center.lat()
+                lon: center.lng()
+                radius: 5
+
+            earthRadius = 6378.137 # km
+            range = 5 # km
+            rangeRadian = range / earthRadius
+            lngRangeRadian = rangeRadian / Math.cos(center.lat() * Math.PI / 180)
+            console.log lngRangeRadian
+            panoramioSearch
+                minx: center.lng() - lngRangeRadian
+                maxx: center.lng() + lngRangeRadian
+                miny: center.lat() - rangeRadian
+                maxy: center.lat() + rangeRadian
+            console.log center.lng() - lngRangeRadian
+            console.log center.lng() + lngRangeRadian
+            console.log center.lat() - rangeRadian
+            console.log center.lat() + rangeRadian
     else
         $('#google-maps').css 'display', 'none'
+
     $metadata = $('#metadata')
     $metadata.children().remove()
     for key, value of metaGroups

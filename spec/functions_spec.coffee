@@ -45,3 +45,8 @@ describe 'ancestorFolders', ->
 
     it 'returns ancestor paths', ->
         expect(ancestorFolders '/a/b/c').toEqual ['', '/a', '/a/b', '/a/b/c']
+
+describe 'exifDate2Date', ->
+    it 'returns a date from EXIF Date formated string', ->
+        expect(exifDate2Date '2013:01:12 18:25:24').toEqual new Date(Date.UTC 2013, 0, 12, 18, 25, 24)
+    

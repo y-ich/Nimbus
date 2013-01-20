@@ -24,6 +24,7 @@ $breadcrumbs = null
 $fileModal = null
 $viewer = null
 $viewerModal = null
+$popoverParent = null
 
 # general functions
 
@@ -467,21 +468,22 @@ initializeEventHandlers = ->
                 getAndShowFolder config.get 'currentFolder'
 
     $('#share').on 'click', (event) ->
-        $active = $main.find 'tr.info'
-        return if $active.length == 0
-        stat = $active.data 'dropbox-stat'
+        $popoverParent = $main.find 'tr.info'
+        return if $popoverParent.length == 0
+        stat = $popoverParent.data 'dropbox-stat'
         spinner.spin document.body
         dropbox.makeUrl stat.path, null, (error, url) ->
             spinner.stop()
             if error
                 handleDropboxError error
             else
-                $active.popover
+                $popoverParent.popover
                     placement: 'bottom'
                     trigger: 'manual'
                     title: ''
                     content: url.url
-                $active.popover 'show'
+                $popoverParent.popover 'show'
+
     $('#open').on 'click', (event) ->
         $active = $main.find 'tr.info'
         stat = $active.data 'dropbox-stat'
@@ -535,6 +537,11 @@ initializeEventHandlers = ->
         if maps?
             google.maps.event.trigger maps, 'resize' 
             maps.setCenter center
+
+    $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
+        if $popoverParent? and not $(event.target).hasClass 'popover-content'
+            $popoverParent.popover 'destroy'
+            $popoverParent = null
 
 # main
 unless jasmine?

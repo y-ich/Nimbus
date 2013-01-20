@@ -166,7 +166,6 @@ flickrSearch = (param) ->
 window.flickrHandler = (data) ->
     return if data.stat is 'fail'
     photos = data.photos.photo
-    console.log photos.length
     for i in [0...photos.length]
         $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
     $('#script-flickr').remove()
@@ -184,7 +183,6 @@ panoramioSearch = (param) ->
 
 window.panoramioHandler = (data) ->
     photos = data.photos
-    console.log photos
     for i in [0...photos.length]
         $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
     $('#script-panoramio').remove()
@@ -248,10 +246,6 @@ prepareViewerModal = (name, metaGroups) ->
                 maxx: center.lng() + lngRangeRadian
                 miny: center.lat() - rangeRadian
                 maxy: center.lat() + rangeRadian
-            console.log center.lng() - lngRangeRadian
-            console.log center.lng() + lngRangeRadian
-            console.log center.lat() - rangeRadian
-            console.log center.lat() + rangeRadian
     else
         $('#google-maps').css 'display', 'none'
 

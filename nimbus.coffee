@@ -234,6 +234,28 @@ makeFileList = (stats, order, direction) ->
     $main.append $div
     $table.on 'click', 'tr', onClickFileRow # enable to click.
 
+resortFileList = (order, direction) ->
+    ### sorts file list. ###
+    sign = if direction is 'ascending' then 1 else -1
+    sortFunc = switch order
+            when 'name'
+                (a, b) -> sign * compareString a.name.toLowerCase(), b.name.toLowerCase()
+            when 'kind'
+                (a, b) -> sign * compareString getExtension(a.name).toLowerCase(), getExtension(b.name).toLowerCase()
+            when 'date'
+                (a, b) -> sign * (a.modifiedAt.getTime() - b.modifiedAt.getTime())
+            when 'size'
+                (a, b) -> sign * (a.size - b.size)        
+
+    $trs = $main.find('table tr:not(:first)')
+    $trs.sort (a, b) ->
+        sortFunc $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
+    $trs.detach()
+    $trs.appendTo $main.find('table > tbody')
+    for className in ['ascending', 'descending']
+        $main.find("th.#{className}").removeClass className
+    $main.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
+    
 makeCoverFlow = (stats) ->
     ### prepares cover flow. ###
     $main.children().remove()
@@ -422,7 +444,7 @@ initializeEventHandlers = ->
             order: $this.children('span').text()
             direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
         config.set 'fileList', orderAndDirection            
-        makeFileList currentStats, orderAndDirection.order, orderAndDirection.direction
+        resortFileList orderAndDirection.order, orderAndDirection.direction
     
     $('#menu-new-folder').on 'click', (event) ->
         event.preventDefault()

@@ -134,6 +134,7 @@ thumbnailUrl = (stat, size = 'small') ->
         "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
 
 compareStatBy = (order, direction) ->
+    ### returns compare function for stats by order and direction ###
     sign = if direction is 'ascending' then 1 else -1
     switch order
         when 'name'
@@ -476,18 +477,11 @@ initializeEventHandlers = ->
                 handleDropboxError error
             else
                 $active.popover
-                    placement: 'top'
+                    placement: 'bottom'
                     trigger: 'manual'
-                    title: 'Public URL'
+                    title: ''
                     content: url.url
                 $active.popover 'show'
-                $content = $active.next().find('.popover-content')
-                range = document.createRange()
-                range.selectNodeContents $content[0]
-                sel = getSelection()
-                sel.removeAllRanges()
-                sel.addRange range
-
     $('#open').on 'click', (event) ->
         $active = $main.find 'tr.info'
         stat = $active.data 'dropbox-stat'

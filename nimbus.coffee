@@ -53,11 +53,11 @@ byteString = (n) ->
     if n < 1000
         n.toString() + 'B'
     else if n < 1000000
-        Math.floor(n / 1000).toString() + 'KB'
+        Math.round(n / 1000).toString() + 'KB'
     else if n < 1000000000
-        Math.floor(n / 1000000).toString() + 'MB'
+        Math.round(n / 1000000).toString() + 'MB'
     else if n < 1000000000000
-        Math.floor(n / 1000000000).toString() + 'GB'
+        Math.round(n / 1000000000).toString() + 'GB'
 
 getExtension = (path) ->
     ### returns extention in path. ###
@@ -65,7 +65,7 @@ getExtension = (path) ->
 
 isJpegFile = (name) ->
     ### judges whether JPEG or not by file name extension. ###
-    ['jpg', 'jpeg'].indexOf(getExtension(name).toLowerCase()) >= 0
+    ['jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'].indexOf(getExtension(name).toLowerCase()) >= 0
 
 ancestorFolders = (path) ->
     ###

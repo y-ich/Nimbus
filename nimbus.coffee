@@ -184,12 +184,12 @@ prepareViewModal = (name, metaGroups) ->
                 position: center
     else
         $('#google-maps').css 'display', 'none'
-    $dl = $viewerModal.find('dl')
-    $dl.children().remove()
+    $metadata = $('#metadata')
+    $metadata.children().remove()
     for key, value of metaGroups
         for k, v of value when v instanceof JpegMeta.MetaProp
-            $dl.append "<dt>#{v.description}</dt>"
-            $dl.append "<dd>#{v.value}</dd>"
+            $metadata.append "<dt>#{v.description}</dt>"
+            $metadata.append "<dd>#{v.value}</dd>"
     
 preview = (stat, link) ->
     ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 

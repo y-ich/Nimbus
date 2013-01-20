@@ -210,7 +210,7 @@ class PersistentObject
 
 # DOM manupulations
 
-prepareViewModal = (name, metaGroups) ->
+prepareViewerModal = (name, metaGroups) ->
     $viewerModal.find('h3').text name
     if metaGroups.gps?
         $('#google-maps').css 'display', ''
@@ -268,14 +268,15 @@ preview = (stat, link) ->
     
     switch getExtension(stat.name).toLowerCase()
         when 'jpg', 'jpeg'
-            spinner.spin document.body
+            $viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
+            $viewer.fadeIn()
+            spinner.spin $viewerModal[0]
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
                 spinner.stop()
-                $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
+                # $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
                 jpeg = new JpegMeta.JpegFile string, stat.name
-                prepareViewModal stat.name, jpeg.metaGroups
+                prepareViewerModal stat.name, jpeg.metaGroups
                 $('#button-info').css 'dispay', ''
-                $viewer.fadeIn()
         when 'png', 'gif'
             $viewer.css 'background-image', "url(\"#{link}\")"
             $('#button-info').css 'dispay', 'none'

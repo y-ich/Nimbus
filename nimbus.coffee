@@ -149,8 +149,6 @@ class PersistentObject
 
     set: (key, value) ->
         @object[key] = value
-        console.log JSON.stringify @object
-        console.log @key
         localStorage[@key] = JSON.stringify @object
 
 # DOM manupulations
@@ -251,7 +249,7 @@ makeCoverFlow = (stats) ->
                 "image": thumbnailUrl stat, 'l'
                 "link": null
                 "duration": ''
-                "stat": stat
+                "stat": stat # extension for this app
             if stat.isFile
                 unless /~$/.test stat.name # You can not make URL for backup file (ex. .txt~). (403 forbidden)
                     dropbox.makeUrl stat.path, download: true, (error, url) ->
@@ -262,7 +260,11 @@ makeCoverFlow = (stats) ->
             play
     coverflow('coverflow').setup(options).on 'ready', ->
         @on 'click', (index, link) ->
-            preview @config.playlist[index].stat, link if link?
+            stat = @config.playlist[index].stat
+            if link?
+                preview stat, link
+            else if stat.isFolder
+                getAndShowFolder stat.path
 
 showFolder = (stats) ->
     ### prepares file list or cover flow. ###

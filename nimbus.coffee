@@ -289,7 +289,12 @@ preview = (stat, link) ->
             $viewer.css 'background-image', "url(\"#{link}\")"
             $viewer.fadeIn()
         else
-            null
+            spinner.spin document.body
+            dropbox.makeUrl stat.path, download: true, (error, url) ->
+                spinner.stop()
+                bootbox.confirm 'Do you want to open in new tab?', (result) ->
+                    window.open url.url if result
+                
 
 makeFileList = (stats, order, direction) ->
     ### prepares file list. ###

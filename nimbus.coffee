@@ -9,7 +9,9 @@
 # global variables
 
 DROPBOX_API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
+FLICKR_API_KEY = 'deab42733a35afe10cee60d4daeed7c6'
 INSTAGRAM_CLIENT_ID = '04f30474ba9347eaae106a7c1c6f77dd'
+MAX_NUM_SEARCH_PHOTOS = 10
 instajam = null
 dropbox = null
 directUrl = null
@@ -83,6 +85,10 @@ ancestorFolders = (path) ->
         split = path.split '/'
         split[0..i].join '/' for e, i in split
 
+obj2query = (obj) ->
+    ### returns query string of obj(hash). ###
+    (encodeURIComponent(key) + '=' + encodeURIComponent(value) for key, value of obj).join '&'
+
 # utility functions for Dropbox
 
 handleDropboxError = (error, path = null) ->
@@ -150,45 +156,33 @@ compareStatBy = (order, direction) ->
             (a, b) -> sign * (a.size - b.size)        
 
 exifDate2Date = (str) ->
+    ### returns JavaScript Date understandable date string from EXIF DateTime format. ###
     new Date Date.parse str.replace(/^(\d+):(\d+):(\d+)/, '$1/$2/$3') + ' UTC'
 
 # service interfaces
-obj2query = (obj) ->
-    (encodeURIComponent(key) + '=' + encodeURIComponent(value) for key, value of obj).join '&'
 
-flickrSearch = (param) ->
-    param.api_key  = 'deab42733a35afe10cee60d4daeed7c6'
-    param.method   = 'flickr.photos.search'
-    param.per_page = 500
-    param.format   = 'json'
-    param.jsoncallback = 'flickrHandler'
+flickrSearch = (param, callback) ->
+    ###
+    searches Flickr.
+    http://www.flickr.com/services/api/flickr.photos.search.html
+    ###
+    defaultQuery =
+        api_key: FLICKR_API_KEY
+        method: 'flickr.photos.search'
+        per_page: MAX_NUM_SEARCH_PHOTOS
+        format: 'json'
+    param[key] ?= value for key, value of defaultQuery
+    $.getJSON "http://www.flickr.com/services/rest/?#{obj2query param}&jsoncallback=?", null, callback
 
-    $(document.body).append "<script id=\"script-flickr\" src=\"http://www.flickr.com/services/rest/?#{obj2query param}\"></script>"
-
-window.flickrHandler = (data) ->
-    return if data.stat is 'fail'
-    photos = data.photos.photo
-    for i in [0...photos.length]
-        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
-    $('#script-flickr').remove()
-
-panoramioSearch = (param) ->
-    query =
+panoramioSearch = (param, callback) ->
+    defaultQuery =
         set: 'full'
         from: 0
-        to: 99
+        to: MAX_NUM_SEARCH_PHOTOS
         size: 'thumbnail'
         mapfilter: false
-        callback: 'panoramioHandler'
-    param[key] ?= value for key, value of query
-    $(document.body).append "<script id=\"script-panoramio\" src=\"http://www.panoramio.com/map/get_panoramas.php?#{obj2query param}\"></script>"
-
-window.panoramioHandler = (data) ->
-    photos = data.photos
-    for i in [0...photos.length]
-        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
-    $('#script-panoramio').remove()
-
+    param[key] ?= value for key, value of defaultQuery
+    $.getJSON "http://www.panoramio.com/map/get_panoramas.php?#{obj2query param}&callback=?", null, callback
 
 # utility classes for app
 
@@ -230,24 +224,33 @@ prepareViewerModal = (stat, metaGroups) ->
         if metaGroups.exif?.DateTimeOriginal?.value?
             date = exifDate2Date metaGroups.exif.DateTimeOriginal.value
             flickrSearch
-                ###
-                min_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0) / 1000
-                max_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 99) / 1000
-                ###
-                has_geo: 1
-                lat: center.lat()
-                lon: center.lng()
-                radius: 5
+                    ###
+                    min_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0) / 1000
+                    max_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 99) / 1000
+                    ###
+                    has_geo: 1
+                    lat: center.lat()
+                    lon: center.lng()
+                    radius: 5
+                , (data) ->
+                    return if data.stat is 'fail'
+                    photos = data.photos.photo
+                    for i in [0...photos.length]
+                        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
 
             earthRadius = 6378.137 # km
             range = 5 # km
             rangeRadian = range / earthRadius
             lngRangeRadian = rangeRadian / Math.cos(center.lat() * Math.PI / 180)
             panoramioSearch
-                minx: center.lng() - lngRangeRadian
-                maxx: center.lng() + lngRangeRadian
-                miny: center.lat() - rangeRadian
-                maxy: center.lat() + rangeRadian
+                    minx: center.lng() - lngRangeRadian
+                    maxx: center.lng() + lngRangeRadian
+                    miny: center.lat() - rangeRadian
+                    maxy: center.lat() + rangeRadian
+                , (data) ->
+                    photos = data.photos
+                    for i in [0...photos.length]
+                        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
             instajam.media.search
                     lat: center.lat()
                     lng: center.lng()
@@ -255,7 +258,7 @@ prepareViewerModal = (stat, metaGroups) ->
                     if result instanceof Error
                         console.error result
                     else
-                        $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data
+                        $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
     else
         $('#google-maps').css 'display', 'none'
 

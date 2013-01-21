@@ -210,9 +210,9 @@ class PersistentObject
 
 # DOM manupulations
 
-prepareViewerModal = (name, metaGroups) ->
+prepareViewerModal = (stat, metaGroups) ->
     $('#photo-services').children().remove()
-    $viewerModal.find('h3').text name
+    $viewerModal.find('h3').html "<img src=\"#{thumbnailUrl stat, 'm'}\">#{stat.name}"
     if metaGroups.gps?
         $('#google-maps').css 'display', ''
         center = new google.maps.LatLng metaGroups.gps.latitude.value, metaGroups.gps.longitude.value
@@ -251,7 +251,11 @@ prepareViewerModal = (name, metaGroups) ->
             instajam.media.search
                     lat: center.lat()
                     lng: center.lng()
-                , (result) -> $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data
+                , (result) -> 
+                    if result instanceof Error
+                        console.error result
+                    else
+                        $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data
     else
         $('#google-maps').css 'display', 'none'
 
@@ -275,7 +279,7 @@ preview = (stat, link) ->
                 spinner.stop()
                 # $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
                 jpeg = new JpegMeta.JpegFile string, stat.name
-                prepareViewerModal stat.name, jpeg.metaGroups
+                prepareViewerModal stat, jpeg.metaGroups
                 $('#button-info').css 'dispay', ''
         when 'png', 'gif'
             $viewer.css 'background-image', "url(\"#{link}\")"
@@ -617,7 +621,7 @@ initializeEventHandlers = ->
 
 # main
 unless jasmine?
-    new NoClickDelay()
+    new NoClickDelay document.body, ['BUTTON', 'A', 'INPUT', 'TH', 'TR']
     spinner = new Spinner()
     $signInout = $('#sign-inout')
     $main = $('#main')

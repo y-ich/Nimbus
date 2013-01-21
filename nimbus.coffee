@@ -617,7 +617,7 @@ initializeEventHandlers = ->
 
 # main
 unless jasmine?
-    NoClickDelay document.body
+    new NoClickDelay()
     spinner = new Spinner()
     $signInout = $('#sign-inout')
     $main = $('#main')

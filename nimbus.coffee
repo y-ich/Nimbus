@@ -9,6 +9,8 @@
 # global variables
 
 API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
+INSTAGRAM_CLIENT_ID = '04f30474ba9347eaae106a7c1c6f77dd'
+instajam = null
 dropbox = null
 directUrl = null
 currentStats = null
@@ -167,7 +169,7 @@ window.flickrHandler = (data) ->
     return if data.stat is 'fail'
     photos = data.photos.photo
     for i in [0...photos.length]
-        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
+        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\" class=\"photo-thumbnail\">"
     $('#script-flickr').remove()
 
 panoramioSearch = (param) ->
@@ -184,7 +186,7 @@ panoramioSearch = (param) ->
 window.panoramioHandler = (data) ->
     photos = data.photos
     for i in [0...photos.length]
-        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
+        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\" class=\"photo-thumbnail\">"
     $('#script-panoramio').remove()
 
 
@@ -209,6 +211,7 @@ class PersistentObject
 # DOM manupulations
 
 prepareViewerModal = (name, metaGroups) ->
+    $('#photo-services').children().remove()
     $viewerModal.find('h3').text name
     if metaGroups.gps?
         $('#google-maps').css 'display', ''
@@ -240,12 +243,15 @@ prepareViewerModal = (name, metaGroups) ->
             range = 5 # km
             rangeRadian = range / earthRadius
             lngRangeRadian = rangeRadian / Math.cos(center.lat() * Math.PI / 180)
-            console.log lngRangeRadian
             panoramioSearch
                 minx: center.lng() - lngRangeRadian
                 maxx: center.lng() + lngRangeRadian
                 miny: center.lat() - rangeRadian
                 maxy: center.lat() + rangeRadian
+            instajam.media.search
+                    lat: center.lat()
+                    lng: center.lng()
+                , (result) -> $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\" class=\"photo-thumbnail\">" for e in result.data
     else
         $('#google-maps').css 'display', 'none'
 
@@ -619,7 +625,7 @@ unless jasmine?
     $fileModal = $('#file-modal')
     $viewer = $('#viewer')
     $viewerModal = $('#viewer-modal')
-
+    instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID
     config = PersistentObject.restore 'nimbus-config',
         currentFolder: '/'
         fileList:

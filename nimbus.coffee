@@ -8,7 +8,7 @@
 
 # global variables
 
-API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
+DROPBOX_API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
 INSTAGRAM_CLIENT_ID = '04f30474ba9347eaae106a7c1c6f77dd'
 instajam = null
 dropbox = null
@@ -169,7 +169,7 @@ window.flickrHandler = (data) ->
     return if data.stat is 'fail'
     photos = data.photos.photo
     for i in [0...photos.length]
-        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\" class=\"photo-thumbnail\">"
+        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
     $('#script-flickr').remove()
 
 panoramioSearch = (param) ->
@@ -186,7 +186,7 @@ panoramioSearch = (param) ->
 window.panoramioHandler = (data) ->
     photos = data.photos
     for i in [0...photos.length]
-        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\" class=\"photo-thumbnail\">"
+        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
     $('#script-panoramio').remove()
 
 
@@ -251,7 +251,7 @@ prepareViewerModal = (name, metaGroups) ->
             instajam.media.search
                     lat: center.lat()
                     lng: center.lng()
-                , (result) -> $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\" class=\"photo-thumbnail\">" for e in result.data
+                , (result) -> $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data
     else
         $('#google-maps').css 'display', 'none'
 
@@ -420,7 +420,7 @@ initializeDropbox = ->
     ###
     $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
     dropbox = new Dropbox.Client
-        key: API_KEY
+        key: DROPBOX_API_KEY
         sandbox: false
     dropbox.authDriver new Dropbox.Drivers.Redirect rememberUser: true
     

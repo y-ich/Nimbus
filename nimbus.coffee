@@ -272,9 +272,10 @@ prepareViewerModal = (stat, metaGroups) ->
 preview = (stat, link) ->
     ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 
     $viewer.css 'background-image', ''
+    $('#button-info').css 'dispay', 'none'
     
     switch getExtension(stat.name).toLowerCase()
-        when 'jpg', 'jpeg'
+        when 'jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'
             $viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
             $viewer.fadeIn()
             spinner.spin $viewerModal[0]
@@ -286,7 +287,6 @@ preview = (stat, link) ->
                 $('#button-info').css 'dispay', ''
         when 'png', 'gif'
             $viewer.css 'background-image', "url(\"#{link}\")"
-            $('#button-info').css 'dispay', 'none'
             $viewer.fadeIn()
         else
             null

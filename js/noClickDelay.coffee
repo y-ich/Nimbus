@@ -3,7 +3,7 @@
 ###
 class NoClickDelay
     constructor: (@element) ->
-        @element.addEventListener 'touchstart', this, false if window.Touch?
+        @element.addEventListener 'touchstart', this, false if `'ontouchstart' in window` or window.DocumentTouch and document instanceof DocumentTouch
 
 	handleEvent: (event) ->
 		switch event.type

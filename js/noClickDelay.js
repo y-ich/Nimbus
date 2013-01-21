@@ -12,7 +12,7 @@
 
     function NoClickDelay(element) {
       this.element = element;
-      if (window.Touch != null) {
+      if ('ontouchstart' in window || window.DocumentTouch && document instanceof DocumentTouch) {
         this.element.addEventListener('touchstart', this, false);
       }
     }

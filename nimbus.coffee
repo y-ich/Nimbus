@@ -117,7 +117,7 @@ handleDropboxError = (error, path = null) ->
             alert 'Dropbox seems busy. Please try again later.'
         else
             alert 'Sorry, there seems something wrong in software.'
-            if 500 <= error.status > 600
+            if 500 <= error.status < 600
                 console.error 'Server error'
             else
                 console.error 'unknown error'
@@ -205,16 +205,19 @@ class PersistentObject
 # DOM manupulations
 
 prepareViewerModal = (stat, metaGroups) ->
-    $('#photo-services').children().remove()
+    $photoServices = $('#photo-services')
+    $photoServices.children().remove()
+    $photoServices.prev().css 'display', 'none'
+    $maps = $('#google-maps')
     $viewerModal.find('h3').html "<img src=\"#{thumbnailUrl stat, 'm'}\">#{stat.name}"
     if metaGroups.gps?
-        $('#google-maps').css 'display', ''
+        $maps.css 'display', ''
         center = new google.maps.LatLng metaGroups.gps.latitude.value, metaGroups.gps.longitude.value
         if maps?
             maps.setCenter center
         else
-            maps = new google.maps.Map $('#google-maps')[0], 
-                zoom: 8
+            maps = new google.maps.Map $maps[0], 
+                zoom: 16
                 center: center
                 mapTypeId: google.maps.MapTypeId.ROADMAP
             marker = new google.maps.Marker
@@ -235,8 +238,10 @@ prepareViewerModal = (stat, metaGroups) ->
                 , (data) ->
                     return if data.stat is 'fail'
                     photos = data.photos.photo
-                    for i in [0...photos.length]
-                        $('#photo-services').append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
+                    if photos.length > 0
+                        $photoServices.prev().css 'display', 'block'
+                        for i in [0...photos.length]
+                            $photoServices.append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
 
             earthRadius = 6378.137 # km
             range = 5 # km
@@ -249,8 +254,10 @@ prepareViewerModal = (stat, metaGroups) ->
                     maxy: center.lat() + rangeRadian
                 , (data) ->
                     photos = data.photos
-                    for i in [0...photos.length]
-                        $('#photo-services').append "<img src=\"#{photos[i].photo_file_url}\">"
+                    if photos.length > 0
+                        $photoServices.prev().css 'display', 'block'
+                        for i in [0...photos.length]
+                            $photoServices.append "<img src=\"#{photos[i].photo_file_url}\">"
             instajam.media.search
                     lat: center.lat()
                     lng: center.lng()
@@ -258,9 +265,11 @@ prepareViewerModal = (stat, metaGroups) ->
                     if result instanceof Error
                         console.error result
                     else
-                        $('#photo-services').append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
+                        if result.data.length > 0
+                            $photoServices.prev().css 'display', 'block'
+                            $photoServices.append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
     else
-        $('#google-maps').css 'display', 'none'
+        $maps.css 'display', 'none'
 
     $metadata = $('#metadata')
     $metadata.children().remove()
@@ -272,7 +281,7 @@ prepareViewerModal = (stat, metaGroups) ->
 preview = (stat, link) ->
     ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 
     $viewer.css 'background-image', ''
-    $('#button-info').css 'dispay', 'none'
+    $('#button-info').attr 'disabled', 'disabled'
     
     switch getExtension(stat.name).toLowerCase()
         when 'jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'
@@ -284,7 +293,7 @@ preview = (stat, link) ->
                 # $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
                 jpeg = new JpegMeta.JpegFile string, stat.name
                 prepareViewerModal stat, jpeg.metaGroups
-                $('#button-info').css 'dispay', ''
+                $('#button-info').removeAttr 'disabled'
         when 'png', 'gif'
             $viewer.css 'background-image', "url(\"#{link}\")"
             $viewer.fadeIn()

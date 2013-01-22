@@ -29,10 +29,10 @@ spinner = null
 maps = null
 center = null
 mainViewController = null
+fileModalController = null
 # view
 $signInout = null
 $breadcrumbs = null
-$fileModal = null
 $viewer = null
 $viewerModal = null
 $popoverParent = null
@@ -215,6 +215,7 @@ class PersistentObject
 
 class MainViewController
     constructor: ->
+        self = this
         @stats = null
         @coverflow = null
         @$fileList = $('#file-list')
@@ -222,60 +223,63 @@ class MainViewController
         @$thead = @$fileList.children 'thead'
         # don't use variable of $('#coverflow'). $('#coverflow') is not static due to coverflow.js.
 
-        if @viewMode() is 'list'
+        if @_viewMode() is 'list'
             @$fileList.parent().css 'display', 'block'
             $('#coverflow').css 'display', 'none'
         else
             @$fileList.parent().css 'display', 'none'
             $('#coverflow').css 'display', 'block'
                 
-        self = this
+        $('#radio-view > button').on 'click', -> self._switchView $(this).val()
+
         @$thead.children().on 'click', 'th:not(:first)', ->
             $this = $(this)
             orderAndDirection = 
                 order: $this.children('span').text()
                 direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
             config.set 'fileList', orderAndDirection
-            self.sortFileList orderAndDirection.order, orderAndDirection.direction    
+            self._sortFileList orderAndDirection.order, orderAndDirection.direction    
 
     updateView: (@stats, search = false) ->
-        if @viewMode() is 'coverflow'
-            @drawCoverFlow()
-            @clearFileList()
+        if @_viewMode() is 'coverflow'
+            @_drawCoverFlow()
+            @_clearFileList()
         else
-            @drawFileList config.get('fileList').order, config.get('fileList').direction, search
-            @clearCoverFlow()
+            @_drawFileList config.get('fileList').order, config.get('fileList').direction, search
+            @_clearCoverFlow()
 
     enableClick: ->
-        @$tbody.on 'click', 'tr', @onClickFileRow
-        @$tbody.on 'click', 'a', @onClickFileAnchor
+        @$tbody.on 'click', 'tr', onClickFileRow
+        @$tbody.on 'click', 'a', onClickFileAnchor
         
     disableClick: ->
-        @$tbody.off 'click', 'tr', @onClickFileRow
-        @$tbody.off 'click', 'a', @onClickFileAnchor
+        @$tbody.off 'click', 'tr', onClickFileRow
+        @$tbody.off 'click', 'a', onClickFileAnchor
 
-    clearFileList: -> @$tbody.empty()
+    _viewMode: -> $('#radio-view > button.active').val()
         
-    clearCoverFlow: ->
+    _clearFileList: -> @$tbody.empty()
+        
+    _clearCoverFlow: ->
         @coverflow?.remove()
         @coverflow = null
 
-    switchView: (view) ->
+    _switchView: (view) ->
         return unless @stats?
         if view is 'coverflow'
             @$fileList.parent().css 'display', 'none'
-            @drawCoverFlow() unless @isCoverFlowUpdated()
+            @_drawCoverFlow() unless @_isCoverFlowUpdated()
             $('#coverflow').css 'display', 'block'
         else
-            @drawFileList config.get('fileList').order, config.get('fileList').direction unless @isFileListUpdated()
+            @_drawFileList config.get('fileList').order, config.get('fileList').direction unless @_isFileListUpdated()
             @$fileList.parent().css 'display', 'block'
             $('#coverflow').css 'display', 'none'
 
-    isFileListUpdated: -> @$tbody.children().length > 0
+    _isFileListUpdated: -> @$tbody.children().length > 0
 
-    isCoverFlowUpdated: -> @coverflow?
+    _isCoverFlowUpdated: -> @coverflow?
 
-    drawFileList: (order, direction, search = false) ->
+    _drawFileList: (order, direction, search = false) ->
         ###
         prepares file list.
         if search is false, each stat in stats should be in same folder.    
@@ -308,7 +312,7 @@ class MainViewController
         @$tbody.append trs
         @enableClick()
 
-    sortFileList: (order, direction) ->
+    _sortFileList: (order, direction) ->
         ### sorts file list. ###
         @_updateHeader order, direction
         $trs = @$tbody.children()
@@ -320,7 +324,7 @@ class MainViewController
         @$thead.find("th.#{className}").removeClass className for className in ['ascending', 'descending']
         @$thead.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
 
-    drawCoverFlow: ->
+    _drawCoverFlow: ->
         ### prepares cover flow. ###
         size = 'l'
         width = 320
@@ -363,45 +367,118 @@ class MainViewController
                 else if stat.isFolder
                     getAndShowFolder stat.path
         
-    viewMode: -> $('#radio-view > button.active').val()
-        
-    onClickFileRow: (event) ->
-        ### event handler for file list. ###
-        $this =$(this)
-        stat = $this.data 'dropbox-stat'
-        if not stat?
-            return
-        if stat.isFile
-            if $this.hasClass 'info'
-                $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
-                $fileModal.find('.modal-body').empty()
-                $('#open').attr 'disabled', 'disabled'
+onClickFileRow = (event) ->
+    ### event handler for file list. ###
+    $this =$(this)
+    stat = $this.data 'dropbox-stat'
+    if not stat?
+        return
+    if stat.isFile
+        if $this.hasClass 'info'
+            fileModalController.open stat
+        else
+            mainViewController.$tbody.children().removeClass 'info'
+            $this.addClass 'info'
+    else if stat.isFolder
+        getAndShowFolder stat.path
+
+onClickFileAnchor = (event) ->
+    path = $(this).text()
+    getAndShowFolder path
+    event.preventDefault()
+    
+
+class FileModalController
+    constructor: ->
+        @$fileModal = $('#file-modal')
+        $fileModal = @$fileModal
+        $('#open').on 'click', (event) ->
+            stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
+            preview stat, directUrl
+            $fileModal.modal 'hide'
+
+        $('#delete').on 'click', (event) ->
+            stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
+            if confirm "Do you really delete #{stat.name}?"
                 spinner.spin document.body
-                dropbox.history stat.path, null, (error, stats) ->
+                dropbox.remove stat.path, (error, stat) ->
                     spinner.stop()
                     if error
                         handleDropboxError error
                     else
-                        makeHistoryList stats
-                    $fileModal.modal 'show'
-                directUrl = null
-                dropbox.makeUrl stat.path, download: true, (error, url) ->
-                    if error
-                        handleDropboxError error
-                    else
-                        directUrl = url.url
-                        $('#open').removeAttr 'disabled'
-            else
-                @$tbody.children().removeClass 'info'
-                $this.addClass 'info'
-        else if stat.isFolder
-            getAndShowFolder stat.path
+                        $fileModal.modal 'hide'
+                        getAndShowFolder()
 
-    onClickFileAnchor: (event) ->
-        path = $(this).text()
-        getAndShowFolder path
-        event.preventDefault()
+        $('#revert').on 'click', (event) ->
+            $active = $fileModal.find('tr.info')
+            if $active.length == 0
+                alert 'select a previous version'
+                return
+            stat = $active.data 'dropbox-stat'
+            spinner.spin document.body
+            dropbox.revertFile stat.path, stat.versionTag, (error, stat) ->
+                spinner.stop()
+                if error
+                    handleDropboxError error
+                else
+                    spinner.spin document.body
+                    dropbox.history stat.path, null, (error, stats) ->
+                        spinner.stop()
+                        $fileModal.find('.modal-body').empty()
+                        makeHistoryList stats
+
+        $fileModal.on 'click', 'tbody tr', (event) ->
+            $this =$(this)
+            $fileModal.find('tr').removeClass 'info'
+            $this.addClass 'info'
+            $('#revert').removeAttr 'disabled'
+
+    open: (stat) ->
+        $fileModal = @$fileModal
+        $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
+        $fileModal.find('.modal-body').empty()
+        $('#open').attr 'disabled', 'disabled'
+        spinner.spin document.body
+        dropbox.history stat.path, null, (error, stats) ->
+            spinner.stop()
+            if error
+                handleDropboxError error
+            else
+                makeHistoryList stats
+            $fileModal.modal 'show'
+        directUrl = null
+        dropbox.makeUrl stat.path, download: true, (error, url) ->
+            if error
+                handleDropboxError error
+            else
+                directUrl = url.url
+                $('#open').removeAttr 'disabled'
+
+makeHistoryList = (stats) ->
+    ### prepares file history list. ###
+    ITEMS = [
+        ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
+        ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"]
+    ]
+
+    $table = $('<table class="table"></table>')
     
+    th = (key) -> "<th#{if key is 'size' then ' style="text-align: right;"' else ''}><span>#{key}</span></th>"
+    $table.append "<thead><tr>#{ITEMS.map((e) -> th e[0]).join('')}</tr></thead>"
+
+    stats = stats.sort (a, b) -> b.modifiedAt.getTime() - a.modifiedAt.getTime()
+
+    $tbody = $('<tbody></tbody>')
+    for stat in stats
+        $tr = $("<tr>#{ITEMS.map((e) -> e[1] stat).join('')}</tr>")
+        $tr.data 'dropbox-stat', stat
+        $tbody.append $tr
+    $table.append $tbody
+    
+    $('#file-modal .modal-body').append $table
+    $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
+
+
 
 prepareViewerModal = (stat, metaGroups) ->
     $photoServices = $('#photo-services')
@@ -517,29 +594,6 @@ getAndShowFolder = (path) ->
             updateBreadcrumbs path
             mainViewController.updateView stats, false
 
-makeHistoryList = (stats) ->
-    ### prepares file history list. ###
-    ITEMS =
-        date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
-        size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
-
-    $table = $('<table class="table"></table>')
-    
-    th = (key) -> "<th><span>#{key}</span></th>"
-    $table.append "<thead><tr>#{Object.keys(ITEMS).map(th).join('')}</tr></thead>"
-
-    stats = stats.sort (a, b) -> b.modifiedAt.getTime() - a.modifiedAt.getTime()
-
-    $tbody = $('<tbody></tbody>')
-    for stat in stats
-        $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
-        $tr.data 'dropbox-stat', stat
-        $tbody.append $tr
-    $table.append $tbody
-    
-    $fileModal.find('.modal-body').append $table
-    $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
-
 updateBreadcrumbs = (path) ->
     ### udpates breadcrumb of folder path. ###
     $breadcrumbs.empty()
@@ -610,8 +664,6 @@ initializeEventHandlers = ->
                     $signInout.button 'reset'
                     $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
 
-    $('#radio-view > button').on 'click', -> mainViewController.switchView $(this).val()
-
     $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
         event.preventDefault()
         $this = $(this)
@@ -666,46 +718,12 @@ initializeEventHandlers = ->
                     content: url.url
                 $popoverParent.popover 'show'
 
-    $('#open').on 'click', (event) ->
-        stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
-        preview stat, directUrl
-        $fileModal.modal 'hide'
-
-    $('#delete').on 'click', (event) ->
-        stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
-        if confirm "Do you really delete #{stat.name}?"
-            spinner.spin document.body
-            dropbox.remove stat.path, (error, stat) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                else
-                    $fileModal.modal 'hide'
-                    getAndShowFolder()
-
-    $fileModal.on 'click', 'tbody tr', (event) ->
-        $this =$(this)
-        $fileModal.find('tr').removeClass 'info'
-        $this.addClass 'info'
-        $('#revert').removeAttr 'disabled'
-
-    $('#revert').on 'click', (event) ->
-        $active = $fileModal.find('tr.info')
-        if $active.length == 0
-            alert 'select a previous version'
-            return
-        stat = $active.data 'dropbox-stat'
-        spinner.spin document.body
-        dropbox.revertFile stat.path, stat.versionTag, (error, stat) ->
-            spinner.stop()
-            if error
-                handleDropboxError error
-            else
-                spinner.spin document.body
-                dropbox.history stat.path, null, (error, stats) ->
-                    spinner.stop()
-                    $fileModal.find('.modal-body').empty()
-                    makeHistoryList stats
+    # cancel popover for sharing
+    $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
+        if $popoverParent? and not $(event.target).hasClass 'popover-content'
+            $popoverParent.popover 'destroy'
+            $popoverParent = null
+            event.preventDefault()
 
     $('#button-info').on 'click', (event) ->
         event.stopPropagation() # prevent to click $viewer.
@@ -719,11 +737,7 @@ initializeEventHandlers = ->
             google.maps.event.trigger maps, 'resize' 
             maps.setCenter center
 
-    $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
-        if $popoverParent? and not $(event.target).hasClass 'popover-content'
-            $popoverParent.popover 'destroy'
-            $popoverParent = null
-
+    # search
     xhr = null
     searchString = null
     $('#search').on 'keyup', ->
@@ -748,9 +762,9 @@ unless jasmine?
     new NoClickDelay document.body, ['BUTTON', 'A', 'INPUT', 'TH', 'TR']
     spinner = new Spinner()
     mainViewController = new MainViewController()
+    fileModalController = new FileModalController()
     $signInout = $('#sign-inout')
     $breadcrumbs = $('#footer .breadcrumb')
-    $fileModal = $('#file-modal')
     $viewer = $('#viewer')
     $viewerModal = $('#viewer-modal')
     instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID

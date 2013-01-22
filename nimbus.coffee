@@ -33,12 +33,12 @@ center = null
 # view
 $signInout = null
 $fileList = null
-$coverflow = null
 $breadcrumbs = null
 $fileModal = null
 $viewer = null
 $viewerModal = null
 $popoverParent = null
+# don't use variable of $('#coverflow'). $('#coverflow') is not static.
 
 # general functions
 
@@ -218,7 +218,7 @@ class PersistentObject
 
 prepareViewerModal = (stat, metaGroups) ->
     $photoServices = $('#photo-services')
-    $photoServices.children().remove()
+    $photoServices.empty()
     $photoServices.prev().css 'display', 'none'
     $maps = $('#google-maps')
     $viewerModal.find('h3').html "<img src=\"#{thumbnailUrl stat, 'm'}\">#{stat.name}"
@@ -284,7 +284,7 @@ prepareViewerModal = (stat, metaGroups) ->
         $maps.css 'display', 'none'
 
     $metadata = $('#metadata')
-    $metadata.children().remove()
+    $metadata.empty()
     for key, value of metaGroups
         for k, v of value when v instanceof JpegMeta.MetaProp
             $metadata.append "<dt>#{v.description}</dt>"
@@ -350,7 +350,7 @@ makeFileList = (stats, order, direction, search = false) ->
         trs.push $tr
 
     $tbody = $fileList.find('tbody')
-    $tbody.children().remove()
+    $tbody.empty()
     $tbody.append trs
     $tbody.on 'click', 'tr', onClickFileRow # enable to click.
     $tbody.on 'click', 'a', onClickFileAnchor # enable to click.
@@ -377,12 +377,10 @@ makeCoverFlow = (stats) ->
         if stats.length > max
             setTimeout (-> alert 'Too many files, trying to some of them.'), 0
             stats = stats[0...max]
-    currentCoverFlow?.remove()
-    currentCoverFlow = null
     options =
         width: '100%'
         coverwidth: width
-        height: $coverflow.height()
+        height: Math.floor($('#main').height() * 2 / 3)
         playlist: stats.map (stat) ->
             play = 
                 "title": stat.name
@@ -407,17 +405,7 @@ makeCoverFlow = (stats) ->
                 preview stat, link
             else if stat.isFolder
                 getAndShowFolder stat.path
-    currentCoverFlow
 
-showFolder = (stats) ->
-    ### prepares file list or cover flow. ###
-    if $('#radio-view > button.active').val() is 'coverflow'
-        makeCoverFlow stats
-    else
-        currentCoverFlow?.remove()
-        currentCoverFlow = null
-        makeFileList stats, config.get('fileList').order, config.get('fileList').direction
-    
 getAndShowFolder = (path = '/') ->
     ### gets and shows folder content. ###
     spinner.spin document.body
@@ -428,7 +416,17 @@ getAndShowFolder = (path = '/') ->
         else
             updateBreadcrumbs path
             currentStats = stats
-            showFolder stats
+            if $('#radio-view > button.active').val() is 'coverflow'
+                makeCoverFlow currentStats
+                $('#coverflow').css 'display', 'block'
+                $fileList.parent().css 'display', 'none'
+                $fileList.children('tbody').empty()
+            else
+                makeFileList currentStats, config.get('fileList').order, config.get('fileList').direction
+                $fileList.parent().css 'display', 'block'
+                currentCoverFlow?.remove()
+                currentCoverFlow = null
+                $('#coverflow').css 'display', 'none'
 
 makeHistoryList = (stats) ->
     ### prepares file history list. ###
@@ -455,7 +453,7 @@ makeHistoryList = (stats) ->
 
 updateBreadcrumbs = (path) ->
     ### udpates breadcrumb of folder path. ###
-    $breadcrumbs.children().remove()
+    $breadcrumbs.empty()
     for e, i in ancestorFolders path
         if i == 0
             $breadcrumbs.append '<li><a href="#" data-path="/">Home</a></li>'
@@ -508,7 +506,7 @@ onClickFileRow = (event) ->
     if stat.isFile
         if $this.hasClass 'info'
             $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
-            $fileModal.find('.modal-body').children().remove()
+            $fileModal.find('.modal-body').empty()
             $('#open').attr 'disabled', 'disabled'
             spinner.spin document.body
             dropbox.history stat.path, null, (error, stats) ->
@@ -568,8 +566,16 @@ initializeEventHandlers = ->
                     $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
 
     $('#radio-view > button').on 'click', ->
-        # execute showFolder after radio button processing.
-        setTimeout (-> showFolder currentStats), 0 if currentStats? # currentStats may be null in early stage.
+        ### changes folder view. ###
+        return unless currentStats?
+        if $(this).val() is 'coverflow'
+            $fileList.parent().css 'display', 'none'
+            makeCoverFlow currentStats if $('#coverflow').children().length == 0
+            $('#coverflow').css 'display', 'block'
+        else
+            makeFileList currentStats, config.get('fileList').order, config.get('fileList').direction if $fileList.children('tbody').children().length == 0
+            $fileList.parent().css 'display', 'block'
+            $('#coverflow').css 'display', 'none'
 
     $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
         event.preventDefault()
@@ -676,7 +682,7 @@ initializeEventHandlers = ->
                 spinner.spin document.body
                 dropbox.history stat.path, null, (error, stats) ->
                     spinner.stop()
-                    $fileModal.find('.modal-body').children().remove()
+                    $fileModal.find('.modal-body').empty()
                     makeHistoryList stats
 
     $('#button-info').on 'click', (event) ->
@@ -725,7 +731,6 @@ unless jasmine?
     spinner = new Spinner()
     $signInout = $('#sign-inout')
     $fileList = $('#file-list')
-    $coverflow = $('#coverflow')
     $breadcrumbs = $('#footer .breadcrumb')
     $fileModal = $('#file-modal')
     $viewer = $('#viewer')

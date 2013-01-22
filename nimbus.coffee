@@ -32,7 +32,8 @@ center = null
 
 # view
 $signInout = null
-$main = null
+$fileList = null
+$coverflow = null
 $breadcrumbs = null
 $fileModal = null
 $viewer = null
@@ -333,36 +334,38 @@ makeFileList = (stats, order, direction, search = false) ->
             size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
             kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
 
-    $div = $('<div class="touch-scrolling"><table class="table"></table></div>')
-    $table = $div.children()
-    
-    th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}#{if key is 'size' then ' style=\"text-align: right;\"' else ''}><span>#{key}</span></th>"
-    $table.append "<thead><tr>#{Object.keys(tdGenerator).map(th).join('')}</tr></thead>"
+    $fileList.find('thead > tr').html Object.keys(tdGenerator).map((key) ->
+            '<th' +
+            (if order is key then " class=\"#{direction}\"" else '') +
+            (if key is 'size' then ' style=\"text-align: right;\"' else '') +
+            "><span>#{key}</span></th>"
+        ).join('')
             
     stats = stats.sort compareStatBy order, direction
 
-    $tbody = $('<tbody></tbody>')
+    trs = []
     for stat in stats
         $tr = $("<tr>#{(value(stat) for key, value of tdGenerator).join('')}</tr>")
         $tr.data 'dropbox-stat', stat
-        $tbody.append $tr
+        trs.push $tr
+
+    $tbody = $fileList.find('tbody')
+    $tbody.children().remove()
+    $tbody.append trs
     $tbody.on 'click', 'tr', onClickFileRow # enable to click.
     $tbody.on 'click', 'a', onClickFileAnchor # enable to click.
-    $table.append $tbody
-    $main.children().remove()
-    $main.append $div
 
 sortFileList = (order, direction) ->
     ### sorts file list. ###
-    $tbody = $main.find 'tbody'
+    $tbody = $fileList.find 'tbody'
     $trs = $tbody.find 'tr'
     $trs.detach()
     $trs.sort (a, b) ->
         compareStatBy(order, direction) $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
     $tbody.append $trs
     for className in ['ascending', 'descending']
-        $main.find("th.#{className}").removeClass className
-    $main.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
+        $fileList.find("th.#{className}").removeClass className
+    $fileList.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
 
 makeCoverFlow = (stats) ->
     ### prepares cover flow. ###
@@ -376,12 +379,10 @@ makeCoverFlow = (stats) ->
             stats = stats[0...max]
     currentCoverFlow?.remove()
     currentCoverFlow = null
-    $main.children().remove()
-    $main.append '<div id="coverflow"></div>'
     options =
         width: '100%'
         coverwidth: width
-        height: $main.height()
+        height: $coverflow.height()
         playlist: stats.map (stat) ->
             play = 
                 "title": stat.name
@@ -398,20 +399,20 @@ makeCoverFlow = (stats) ->
                         else
                             play.link = url.url
             play
-    cf = coverflow 'coverflow'
-    cf.setup(options).on 'ready', ->
+    currentCoverFlow = coverflow 'coverflow'
+    currentCoverFlow.setup(options).on 'ready', ->
         @on 'click', (index, link) ->
             stat = @config.playlist[index].stat
             if link?
                 preview stat, link
             else if stat.isFolder
                 getAndShowFolder stat.path
-    cf
+    currentCoverFlow
 
 showFolder = (stats) ->
     ### prepares file list or cover flow. ###
     if $('#radio-view > button.active').val() is 'coverflow'
-        currentCoverFlow = makeCoverFlow stats
+        makeCoverFlow stats
     else
         currentCoverFlow?.remove()
         currentCoverFlow = null
@@ -525,18 +526,18 @@ onClickFileRow = (event) ->
                     directUrl = url.url
                     $('#open').removeAttr 'disabled'
         else
-            $main.find('tr').removeClass 'info'
+            $fileList.find('tr').removeClass 'info'
             $this.addClass 'info'
     else if stat.isFolder
-        $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
-        $main.find('table').off 'click', 'a', onClickFileAnchor # disable during updating.
+        $fileList.off 'click', 'tr', onClickFileRow # disable during updating.
+        $fileList.off 'click', 'a', onClickFileAnchor # disable during updating.
         getAndShowFolder stat.path
         config.set 'currentFolder', stat.path
 
 onClickFileAnchor = (event) ->
     path = $(this).text()
-    $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
-    $main.find('table').off 'click', 'a', onClickFileAnchor # disable during updating.
+    $fileList.off 'click', 'tr', onClickFileRow # disable during updating.
+    $fileList.off 'click', 'a', onClickFileAnchor # disable during updating.
     getAndShowFolder path
     config.set 'currentFolder', path
     event.preventDefault()
@@ -581,7 +582,7 @@ initializeEventHandlers = ->
         getAndShowFolder path
         config.set 'currentFolder', path
     
-    $main.on 'click', 'thead > tr > th:not(:first)', ->
+    $fileList.on 'click', 'thead > tr > th:not(:first)', ->
         $this = $(this)
         orderAndDirection = 
             order: $this.children('span').text()
@@ -618,7 +619,7 @@ initializeEventHandlers = ->
                 getAndShowFolder config.get 'currentFolder'
 
     $('#share').on 'click', (event) ->
-        $popoverParent = $main.find 'tr.info'
+        $popoverParent = $fileList.find 'tr.info'
         return if $popoverParent.length == 0
         stat = $popoverParent.data 'dropbox-stat'
         spinner.spin document.body
@@ -636,13 +637,13 @@ initializeEventHandlers = ->
                 $popoverParent.popover 'show'
 
     $('#open').on 'click', (event) ->
-        $active = $main.find 'tr.info'
+        $active = $fileList.find 'tr.info'
         stat = $active.data 'dropbox-stat'
         preview stat, directUrl
         $fileModal.modal 'hide'
 
     $('#delete').on 'click', (event) ->
-        $active = $main.find 'tr.info'
+        $active = $fileList.find 'tr.info'
         stat = $active.data 'dropbox-stat'
         if confirm "Do you really delete #{stat.name}?"
             spinner.spin document.body
@@ -713,7 +714,7 @@ initializeEventHandlers = ->
                 else
                     currentStats = stats
                     if $('#radio-view > button.active').val() is 'coverflow'
-                        currentCoverFlow = makeCoverFlow stats, true
+                        makeCoverFlow stats, true
                     else
                         makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
                 spinner.stop()
@@ -723,7 +724,8 @@ unless jasmine?
     new NoClickDelay document.body, ['BUTTON', 'A', 'INPUT', 'TH', 'TR']
     spinner = new Spinner()
     $signInout = $('#sign-inout')
-    $main = $('#main')
+    $fileList = $('#file-list')
+    $coverflow = $('#coverflow')
     $breadcrumbs = $('#footer .breadcrumb')
     $fileModal = $('#file-modal')
     $viewer = $('#viewer')

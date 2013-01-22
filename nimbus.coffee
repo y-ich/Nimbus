@@ -25,20 +25,17 @@ instajam = null
 dropbox = null
 directUrl = null
 currentStats = null
-currentCoverFlow = null
 spinner = null
 maps = null
 center = null
-
+mainViewController = null
 # view
 $signInout = null
-$fileList = null
 $breadcrumbs = null
 $fileModal = null
 $viewer = null
 $viewerModal = null
 $popoverParent = null
-# don't use variable of $('#coverflow'). $('#coverflow') is not static.
 
 # general functions
 
@@ -216,6 +213,196 @@ class PersistentObject
 
 # DOM manupulations
 
+class MainViewController
+    constructor: ->
+        @stats = null
+        @coverflow = null
+        @$fileList = $('#file-list')
+        @$tbody = @$fileList.children 'tbody'
+        @$thead = @$fileList.children 'thead'
+        # don't use variable of $('#coverflow'). $('#coverflow') is not static due to coverflow.js.
+
+        if @viewMode() is 'list'
+            @$fileList.parent().css 'display', 'block'
+            $('#coverflow').css 'display', 'none'
+        else
+            @$fileList.parent().css 'display', 'none'
+            $('#coverflow').css 'display', 'block'
+                
+        self = this
+        @$thead.children().on 'click', 'th:not(:first)', ->
+            $this = $(this)
+            orderAndDirection = 
+                order: $this.children('span').text()
+                direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
+            config.set 'fileList', orderAndDirection
+            self.sortFileList orderAndDirection.order, orderAndDirection.direction    
+
+    updateView: (@stats, search = false) ->
+        if @viewMode() is 'coverflow'
+            @drawCoverFlow()
+            @clearFileList()
+        else
+            @drawFileList config.get('fileList').order, config.get('fileList').direction, search
+            @clearCoverFlow()
+
+    enableClick: ->
+        @$tbody.on 'click', 'tr', @onClickFileRow
+        @$tbody.on 'click', 'a', @onClickFileAnchor
+        
+    disableClick: ->
+        @$tbody.off 'click', 'tr', @onClickFileRow
+        @$tbody.off 'click', 'a', @onClickFileAnchor
+
+    clearFileList: -> @$tbody.empty()
+        
+    clearCoverFlow: ->
+        @coverflow?.remove()
+        @coverflow = null
+
+    switchView: (view) ->
+        return unless @stats?
+        if view is 'coverflow'
+            @$fileList.parent().css 'display', 'none'
+            @drawCoverFlow() unless @isCoverFlowUpdated()
+            $('#coverflow').css 'display', 'block'
+        else
+            @drawFileList config.get('fileList').order, config.get('fileList').direction unless @isFileListUpdated()
+            @$fileList.parent().css 'display', 'block'
+            $('#coverflow').css 'display', 'none'
+
+    isFileListUpdated: -> @$tbody.children().length > 0
+
+    isCoverFlowUpdated: -> @coverflow?
+
+    drawFileList: (order, direction, search = false) ->
+        ###
+        prepares file list.
+        if search is false, each stat in stats should be in same folder.    
+        ###
+        tdGenerators = [
+            ['image', (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"]
+            ['name', (stat) -> "<td>#{stat.name}</td>"]
+            ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
+        ]
+        tdGenerators = tdGenerators.concat if search
+                [['place', (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"]]
+            else
+                [
+                    ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"]
+                    ['kind', (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"]
+                ]
+        thGenerator = (key) -> "<th#{(if order is key then ' class=' + direction else '') +
+            (if key is 'size' then ' style=\"text-align: right;\"' else '')}><span>#{key}</span></th>"
+        @$thead.children().html tdGenerators.map((e) -> thGenerator e[0]).join ''
+            
+        stats = @stats.sort compareStatBy order, direction
+
+        trs = []
+        for stat in stats
+            $tr = $("<tr>#{tdGenerators.map((e) -> e[1] stat).join('')}</tr>")
+            $tr.data 'dropbox-stat', stat
+            trs.push $tr
+
+        @$tbody.empty()
+        @$tbody.append trs
+        @enableClick()
+
+    sortFileList: (order, direction) ->
+        ### sorts file list. ###
+        @_updateHeader order, direction
+        $trs = @$tbody.children()
+        $trs.detach()
+        $trs.sort (a, b) -> compareStatBy(order, direction) $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
+        @$tbody.append $trs
+
+    _updateHeader: (order, direction) ->
+        @$thead.find("th.#{className}").removeClass className for className in ['ascending', 'descending']
+        @$thead.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
+
+    drawCoverFlow: ->
+        ### prepares cover flow. ###
+        size = 'l'
+        width = 320
+        stats = @stats
+        if /iPhone|iPad/.test navigator.userAgent
+            dimension = DROPBOX_THUMBNAIL_DIMENSIONS[size]
+            max = Math.floor(5000000 / (width * width * dimension[0] / dimension[1])) # 5000000 is limit of canvas.
+            if @stats.length > max
+                stats = @stats[0...max]
+                setTimeout (-> alert 'Too many files, trying to some of them.'), 0
+
+        options =
+            width: '100%'
+            coverwidth: width
+            height: $('#coverflow').parent().height() # can not use '100%'
+            playlist: stats.map (stat) ->
+                play = 
+                    "title": stat.name
+                    "description": ''
+                    "image": thumbnailUrl stat, size
+                    "link": null
+                    "duration": ''
+                    "stat": stat # extension for this app
+                if stat.isFile
+                    unless /~$/.test stat.name # You can not make URL for backup file (ex. .txt~). (403 forbidden)
+                        dropbox.makeUrl stat.path, download: true, (error, url) ->
+                            if error
+                                handleDropboxError error, stat.path
+                            else
+                                play.link = url.url
+                play
+        spinner.spin document.body
+        @coverflow = coverflow 'coverflow'
+        @coverflow.setup(options).on 'ready', ->
+            spinner.stop()
+            @on 'click', (index, link) ->
+                stat = @config.playlist[index].stat
+                if link?
+                    preview stat, link
+                else if stat.isFolder
+                    getAndShowFolder stat.path
+        
+    viewMode: -> $('#radio-view > button.active').val()
+        
+    onClickFileRow: (event) ->
+        ### event handler for file list. ###
+        $this =$(this)
+        stat = $this.data 'dropbox-stat'
+        if not stat?
+            return
+        if stat.isFile
+            if $this.hasClass 'info'
+                $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
+                $fileModal.find('.modal-body').empty()
+                $('#open').attr 'disabled', 'disabled'
+                spinner.spin document.body
+                dropbox.history stat.path, null, (error, stats) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        makeHistoryList stats
+                    $fileModal.modal 'show'
+                directUrl = null
+                dropbox.makeUrl stat.path, download: true, (error, url) ->
+                    if error
+                        handleDropboxError error
+                    else
+                        directUrl = url.url
+                        $('#open').removeAttr 'disabled'
+            else
+                @$tbody.children().removeClass 'info'
+                $this.addClass 'info'
+        else if stat.isFolder
+            getAndShowFolder stat.path
+
+    onClickFileAnchor: (event) ->
+        path = $(this).text()
+        getAndShowFolder path
+        event.preventDefault()
+    
+
 prepareViewerModal = (stat, metaGroups) ->
     $photoServices = $('#photo-services')
     $photoServices.empty()
@@ -316,117 +503,19 @@ preview = (stat, link) ->
                 bootbox.confirm 'Do you want to open in new tab?', (result) ->
                     window.open url.url if result
                 
-
-makeFileList = (stats, order, direction, search = false) ->
-    ###
-    prepares file list.
-    if search is false, each stat in stats should be in same folder.    
-    ###
-    tdGenerator = if search
-            image: (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"
-            name: (stat) -> "<td>#{stat.name}</td>"
-            place: (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"
-            date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
-        else
-            image: (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"
-            name: (stat) -> "<td>#{stat.name}</td>"
-            date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
-            size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
-            kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
-
-    $fileList.find('thead > tr').html Object.keys(tdGenerator).map((key) ->
-            '<th' +
-            (if order is key then " class=\"#{direction}\"" else '') +
-            (if key is 'size' then ' style=\"text-align: right;\"' else '') +
-            "><span>#{key}</span></th>"
-        ).join('')
-            
-    stats = stats.sort compareStatBy order, direction
-
-    trs = []
-    for stat in stats
-        $tr = $("<tr>#{(value(stat) for key, value of tdGenerator).join('')}</tr>")
-        $tr.data 'dropbox-stat', stat
-        trs.push $tr
-
-    $tbody = $fileList.find('tbody')
-    $tbody.empty()
-    $tbody.append trs
-    $tbody.on 'click', 'tr', onClickFileRow # enable to click.
-    $tbody.on 'click', 'a', onClickFileAnchor # enable to click.
-
-sortFileList = (order, direction) ->
-    ### sorts file list. ###
-    $tbody = $fileList.find 'tbody'
-    $trs = $tbody.find 'tr'
-    $trs.detach()
-    $trs.sort (a, b) ->
-        compareStatBy(order, direction) $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
-    $tbody.append $trs
-    for className in ['ascending', 'descending']
-        $fileList.find("th.#{className}").removeClass className
-    $fileList.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
-
-makeCoverFlow = (stats) ->
-    ### prepares cover flow. ###
-    size = 'l'
-    width = 320
-    if /iPhone|iPad/.test navigator.userAgent
-        dimension = DROPBOX_THUMBNAIL_DIMENSIONS[size]
-        max = Math.floor(5000000 / (width * width * dimension[0] / dimension[1])) # 5000000 is limit of canvas.
-        if stats.length > max
-            setTimeout (-> alert 'Too many files, trying to some of them.'), 0
-            stats = stats[0...max]
-    options =
-        width: '100%'
-        coverwidth: width
-        height: Math.floor($('#main').height() * 2 / 3)
-        playlist: stats.map (stat) ->
-            play = 
-                "title": stat.name
-                "description": ''
-                "image": thumbnailUrl stat, size
-                "link": null
-                "duration": ''
-                "stat": stat # extension for this app
-            if stat.isFile
-                unless /~$/.test stat.name # You can not make URL for backup file (ex. .txt~). (403 forbidden)
-                    dropbox.makeUrl stat.path, download: true, (error, url) ->
-                        if error
-                            handleDropboxError error, stat.path
-                        else
-                            play.link = url.url
-            play
-    currentCoverFlow = coverflow 'coverflow'
-    currentCoverFlow.setup(options).on 'ready', ->
-        @on 'click', (index, link) ->
-            stat = @config.playlist[index].stat
-            if link?
-                preview stat, link
-            else if stat.isFolder
-                getAndShowFolder stat.path
-
-getAndShowFolder = (path = '/') ->
+getAndShowFolder = (path) ->
     ### gets and shows folder content. ###
+    path ?= config.get 'currentFolder'
     spinner.spin document.body
+    mainViewController.disableClick()
     dropbox.readdir path, null, (error, names, stat, stats) ->
         spinner.stop()
         if error
             handleDropboxError error
         else
+            config.set 'currentFolder', path
             updateBreadcrumbs path
-            currentStats = stats
-            if $('#radio-view > button.active').val() is 'coverflow'
-                makeCoverFlow currentStats
-                $('#coverflow').css 'display', 'block'
-                $fileList.parent().css 'display', 'none'
-                $fileList.children('tbody').empty()
-            else
-                makeFileList currentStats, config.get('fileList').order, config.get('fileList').direction
-                $fileList.parent().css 'display', 'block'
-                currentCoverFlow?.remove()
-                currentCoverFlow = null
-                $('#coverflow').css 'display', 'none'
+            mainViewController.updateView stats, false
 
 makeHistoryList = (stats) ->
     ### prepares file history list. ###
@@ -492,54 +581,10 @@ initializeDropbox = ->
                 else
                     $signInout.button 'signout'
                     $('#header button:not(#sign-inout)').removeAttr 'disabled'
-                    getAndShowFolder config.get 'currentFolder'
+                    getAndShowFolder()
             break
     catch error
         console.log error
-
-onClickFileRow = (event) ->
-    ### event handler for file list. ###
-    $this =$(this)
-    stat = $this.data 'dropbox-stat'
-    if not stat?
-        return
-    if stat.isFile
-        if $this.hasClass 'info'
-            $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
-            $fileModal.find('.modal-body').empty()
-            $('#open').attr 'disabled', 'disabled'
-            spinner.spin document.body
-            dropbox.history stat.path, null, (error, stats) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                else
-                    makeHistoryList stats
-                $fileModal.modal 'show'
-            directUrl = null
-            dropbox.makeUrl stat.path, download: true, (error, url) ->
-                if error
-                    handleDropboxError error
-                else
-                    directUrl = url.url
-                    $('#open').removeAttr 'disabled'
-        else
-            $fileList.find('tr').removeClass 'info'
-            $this.addClass 'info'
-    else if stat.isFolder
-        $fileList.off 'click', 'tr', onClickFileRow # disable during updating.
-        $fileList.off 'click', 'a', onClickFileAnchor # disable during updating.
-        getAndShowFolder stat.path
-        config.set 'currentFolder', stat.path
-
-onClickFileAnchor = (event) ->
-    path = $(this).text()
-    $fileList.off 'click', 'tr', onClickFileRow # disable during updating.
-    $fileList.off 'click', 'a', onClickFileAnchor # disable during updating.
-    getAndShowFolder path
-    config.set 'currentFolder', path
-    event.preventDefault()
-    
 
 initializeEventHandlers = ->
     ### sets event handlers ###
@@ -565,36 +610,15 @@ initializeEventHandlers = ->
                     $signInout.button 'reset'
                     $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
 
-    $('#radio-view > button').on 'click', ->
-        ### changes folder view. ###
-        return unless currentStats?
-        if $(this).val() is 'coverflow'
-            $fileList.parent().css 'display', 'none'
-            makeCoverFlow currentStats if $('#coverflow').children().length == 0
-            $('#coverflow').css 'display', 'block'
-        else
-            makeFileList currentStats, config.get('fileList').order, config.get('fileList').direction if $fileList.children('tbody').children().length == 0
-            $fileList.parent().css 'display', 'block'
-            $('#coverflow').css 'display', 'none'
+    $('#radio-view > button').on 'click', -> mainViewController.switchView $(this).val()
 
     $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
         event.preventDefault()
         $this = $(this)
-        currentCoverFlow?.remove()
-        currentCoverFlow = null
         $this.parent().nextUntil().remove() # removes descendent folders.
         $this.parent().addClass 'active'
         path = $this.data 'path'
         getAndShowFolder path
-        config.set 'currentFolder', path
-    
-    $fileList.on 'click', 'thead > tr > th:not(:first)', ->
-        $this = $(this)
-        orderAndDirection = 
-            order: $this.children('span').text()
-            direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
-        config.set 'fileList', orderAndDirection            
-        sortFileList orderAndDirection.order, orderAndDirection.direction
     
     $('#menu-new-folder').on 'click', (event) ->
         event.preventDefault()
@@ -607,7 +631,7 @@ initializeEventHandlers = ->
             if error
                 handleDropboxError error
             else
-                getAndShowFolder config.get 'currentFolder'
+                getAndShowFolder()
 
     $('#menu-upload').on 'click', (event) ->
         event.preventDefault()
@@ -622,10 +646,10 @@ initializeEventHandlers = ->
             if error
                 handleDropboxError error
             else
-                getAndShowFolder config.get 'currentFolder'
+                getAndShowFolder()
 
     $('#share').on 'click', (event) ->
-        $popoverParent = $fileList.find 'tr.info'
+        $popoverParent = $('#file-list > tbody > tr.info')
         return if $popoverParent.length == 0
         stat = $popoverParent.data 'dropbox-stat'
         spinner.spin document.body
@@ -643,14 +667,12 @@ initializeEventHandlers = ->
                 $popoverParent.popover 'show'
 
     $('#open').on 'click', (event) ->
-        $active = $fileList.find 'tr.info'
-        stat = $active.data 'dropbox-stat'
+        stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
         preview stat, directUrl
         $fileModal.modal 'hide'
 
     $('#delete').on 'click', (event) ->
-        $active = $fileList.find 'tr.info'
-        stat = $active.data 'dropbox-stat'
+        stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
         if confirm "Do you really delete #{stat.name}?"
             spinner.spin document.body
             dropbox.remove stat.path, (error, stat) ->
@@ -659,7 +681,7 @@ initializeEventHandlers = ->
                     handleDropboxError error
                 else
                     $fileModal.modal 'hide'
-                    getAndShowFolder config.get 'currentFolder'
+                    getAndShowFolder()
 
     $fileModal.on 'click', 'tbody tr', (event) ->
         $this =$(this)
@@ -709,7 +731,7 @@ initializeEventHandlers = ->
         xhr.abort() if xhr?
         xhr = null
         if $this.val() is ''
-            getAndShowFolder config.get 'currentFolder'
+            getAndShowFolder()
         else if $this.val() isnt searchString
             spinner.spin document.body
             searchString = $this.val()
@@ -718,19 +740,15 @@ initializeEventHandlers = ->
                 if error
                     handleDropboxError error
                 else
-                    currentStats = stats
-                    if $('#radio-view > button.active').val() is 'coverflow'
-                        makeCoverFlow stats, true
-                    else
-                        makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
+                    mainViewController.updateView stats, true
                 spinner.stop()
 
 # main
 unless jasmine?
     new NoClickDelay document.body, ['BUTTON', 'A', 'INPUT', 'TH', 'TR']
     spinner = new Spinner()
+    mainViewController = new MainViewController()
     $signInout = $('#sign-inout')
-    $fileList = $('#file-list')
     $breadcrumbs = $('#footer .breadcrumb')
     $fileModal = $('#file-modal')
     $viewer = $('#viewer')

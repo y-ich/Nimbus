@@ -8,6 +8,15 @@
 
 # global variables
 
+DROPBOX_THUMBNAIL_DIMENSIONS =
+    xs: [32, 32]
+    small: [32, 32]
+    s: [64, 64]
+    medium: [64, 64]
+    m: [128, 128]
+    large: [128, 128]
+    l: [640, 480]
+    xl: [1024, 768]
 DROPBOX_API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
 FLICKR_API_KEY = 'deab42733a35afe10cee60d4daeed7c6'
 INSTAGRAM_CLIENT_ID = '04f30474ba9347eaae106a7c1c6f77dd'
@@ -317,8 +326,6 @@ makeFileList = (stats, order, direction, search = false) ->
             name: (stat) -> "<td>#{stat.name}</td>"
             place: (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"
             date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
-            size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
-            kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
         else
             image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
             name: (stat) -> "<td>#{stat.name}</td>"
@@ -356,9 +363,16 @@ sortFileList = (order, direction) ->
     for className in ['ascending', 'descending']
         $main.find("th.#{className}").removeClass className
     $main.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
-    
+
 makeCoverFlow = (stats) ->
     ### prepares cover flow. ###
+    size = 'l'
+    if /iPhone|iPad/.test navigator.userAgent
+        dimension = DROPBOX_THUMBNAIL_DIMENSIONS[size]
+        max = Math.floor(32000000 / (dimension[0] * dimension[1])) - 22 # 22 is a magic number by experiments.
+        if stats.length > max
+            setTimeout (-> alert 'Too many files, trying to some of them.'), 0
+            stats = stats[0...max]
     $main.children().remove()
     $main.append '<div id="coverflow"></div>'
     options =
@@ -369,7 +383,7 @@ makeCoverFlow = (stats) ->
             play = 
                 "title": stat.name
                 "description": ''
-                "image": thumbnailUrl stat, 'l'
+                "image": thumbnailUrl stat, size
                 "link": null
                 "duration": ''
                 "stat": stat # extension for this app

@@ -25,7 +25,7 @@ instajam = null
 dropbox = null
 directUrl = null
 currentStats = null
-config = null
+currentCoverFlow = null
 spinner = null
 maps = null
 center = null
@@ -322,12 +322,12 @@ makeFileList = (stats, order, direction, search = false) ->
     if search is false, each stat in stats should be in same folder.    
     ###
     tdGenerator = if search
-            image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
+            image: (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"
             name: (stat) -> "<td>#{stat.name}</td>"
             place: (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"
             date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
         else
-            image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
+            image: (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"
             name: (stat) -> "<td>#{stat.name}</td>"
             date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
             size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
@@ -367,17 +367,20 @@ sortFileList = (order, direction) ->
 makeCoverFlow = (stats) ->
     ### prepares cover flow. ###
     size = 'l'
+    width = 320
     if /iPhone|iPad/.test navigator.userAgent
         dimension = DROPBOX_THUMBNAIL_DIMENSIONS[size]
-        max = Math.floor(32000000 / (dimension[0] * dimension[1])) - 22 # 22 is a magic number by experiments.
+        max = Math.floor(5000000 / (width * width * dimension[0] / dimension[1])) # 5000000 is limit of canvas.
         if stats.length > max
             setTimeout (-> alert 'Too many files, trying to some of them.'), 0
             stats = stats[0...max]
+    currentCoverFlow?.remove()
+    currentCoverFlow = null
     $main.children().remove()
     $main.append '<div id="coverflow"></div>'
     options =
         width: '100%'
-        coverwidth: 320
+        coverwidth: width
         height: $main.height()
         playlist: stats.map (stat) ->
             play = 
@@ -395,19 +398,23 @@ makeCoverFlow = (stats) ->
                         else
                             play.link = url.url
             play
-    coverflow('coverflow').setup(options).on 'ready', ->
+    cf = coverflow 'coverflow'
+    cf.setup(options).on 'ready', ->
         @on 'click', (index, link) ->
             stat = @config.playlist[index].stat
             if link?
                 preview stat, link
             else if stat.isFolder
                 getAndShowFolder stat.path
+    cf
 
 showFolder = (stats) ->
     ### prepares file list or cover flow. ###
     if $('#radio-view > button.active').val() is 'coverflow'
-        makeCoverFlow stats
+        currentCoverFlow = makeCoverFlow stats
     else
+        currentCoverFlow?.remove()
+        currentCoverFlow = null
         makeFileList stats, config.get('fileList').order, config.get('fileList').direction
     
 getAndShowFolder = (path = '/') ->
@@ -566,6 +573,8 @@ initializeEventHandlers = ->
     $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
         event.preventDefault()
         $this = $(this)
+        currentCoverFlow?.remove()
+        currentCoverFlow = null
         $this.parent().nextUntil().remove() # removes descendent folders.
         $this.parent().addClass 'active'
         path = $this.data 'path'
@@ -704,7 +713,7 @@ initializeEventHandlers = ->
                 else
                     currentStats = stats
                     if $('#radio-view > button.active').val() is 'coverflow'
-                        makeCoverFlow stats, true
+                        currentCoverFlow = makeCoverFlow stats, true
                     else
                         makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
                 spinner.stop()

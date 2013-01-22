@@ -684,15 +684,16 @@ initializeEventHandlers = ->
             spinner.spin document.body
             searchString = $this.val()
             xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
-                spinner.stop()
                 xhr = null
                 if error
                     handleDropboxError error
                 else
+                    currentStats = stats
                     if $('#radio-view > button.active').val() is 'coverflow'
                         makeCoverFlow stats, true
                     else
                         makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
+                spinner.stop()
 
 # main
 unless jasmine?

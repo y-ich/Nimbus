@@ -116,11 +116,11 @@ handleDropboxError = (error, path = null) ->
         when 503
             alert 'Dropbox seems busy. Please try again later.'
         else
-            alert 'Sorry, there seems something wrong in software.'
             if 500 <= error.status < 600
+                alert 'Sorry, there seems something wrong in Drobox server.'
                 console.error 'Server error'
-            else
-                console.error 'unknown error'
+            else # abort etc.
+                console.log 'abort?'
 
 typeIcon48 = (typeIcon) ->
     ### returns a name of icon for 48px. ###
@@ -154,6 +154,8 @@ compareStatBy = (order, direction) ->
             (a, b) -> sign * (a.modifiedAt.getTime() - b.modifiedAt.getTime())
         when 'size'
             (a, b) -> sign * (a.size - b.size)        
+        when 'place'
+            (a, b) -> sign * compareString a.path.toLowerCase(), b.path.toLowerCase()
 
 exifDate2Date = (str) ->
     ### returns JavaScript Date understandable date string from EXIF DateTime format. ###
@@ -305,30 +307,40 @@ preview = (stat, link) ->
                     window.open url.url if result
                 
 
-makeFileList = (stats, order, direction) ->
-    ### prepares file list. ###
-    ITEMS =
-        image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
-        name: (stat) -> "<td>#{stat.name}</td>"
-        date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
-        size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
-        kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
+makeFileList = (stats, order, direction, search = false) ->
+    ###
+    prepares file list.
+    if search is false, each stat in stats should be in same folder.    
+    ###
+    tdGenerator = if search
+            image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
+            name: (stat) -> "<td>#{stat.name}</td>"
+            place: (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"
+            date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
+            size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
+            kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
+        else
+            image: (stat) -> "<td><img src=\"#{thumbnailUrl stat}\"></td>"
+            name: (stat) -> "<td>#{stat.name}</td>"
+            date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
+            size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
+            kind: (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"
 
     $div = $('<div class="touch-scrolling"><table class="table"></table></div>')
     $table = $div.children()
     
     th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}#{if key is 'size' then ' style=\"text-align: right;\"' else ''}><span>#{key}</span></th>"
-    $table.append "<thead><tr>#{Object.keys(ITEMS).map(th).join('')}</tr></thead>"
+    $table.append "<thead><tr>#{Object.keys(tdGenerator).map(th).join('')}</tr></thead>"
             
     stats = stats.sort compareStatBy order, direction
 
     $tbody = $('<tbody></tbody>')
-    $tbody.on 'click', 'tr', onClickFileRow # enable to click.
     for stat in stats
-        $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
+        $tr = $("<tr>#{(value(stat) for key, value of tdGenerator).join('')}</tr>")
         $tr.data 'dropbox-stat', stat
         $tbody.append $tr
-
+    $tbody.on 'click', 'tr', onClickFileRow # enable to click.
+    $tbody.on 'click', 'a', onClickFileAnchor # enable to click.
     $table.append $tbody
     $main.children().remove()
     $main.append $div
@@ -468,7 +480,7 @@ initializeDropbox = ->
 onClickFileRow = (event) ->
     ### event handler for file list. ###
     $this =$(this)
-    stat = $this.data('dropbox-stat')
+    stat = $this.data 'dropbox-stat'
     if not stat?
         return
     if stat.isFile
@@ -496,8 +508,18 @@ onClickFileRow = (event) ->
             $this.addClass 'info'
     else if stat.isFolder
         $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
+        $main.find('table').off 'click', 'a', onClickFileAnchor # disable during updating.
         getAndShowFolder stat.path
         config.set 'currentFolder', stat.path
+
+onClickFileAnchor = (event) ->
+    path = $(this).text()
+    $main.find('table').off 'click', 'tr', onClickFileRow # disable during updating.
+    $main.find('table').off 'click', 'a', onClickFileAnchor # disable during updating.
+    getAndShowFolder path
+    config.set 'currentFolder', path
+    event.preventDefault()
+    
 
 initializeEventHandlers = ->
     ### sets event handlers ###
@@ -649,6 +671,21 @@ initializeEventHandlers = ->
         if $popoverParent? and not $(event.target).hasClass 'popover-content'
             $popoverParent.popover 'destroy'
             $popoverParent = null
+
+    xhr = null
+    $('#search').on 'keyup', ->
+        xhr.abort() if xhr?
+        spinner.spin document.body
+        xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
+            spinner.stop()
+            xhr = null
+            if error
+                handleDropboxError error
+            else
+                if $('#radio-view > button.active').val() is 'coverflow'
+                    makeCoverFlow stats, true
+                else
+                    makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
 
 # main
 unless jasmine?

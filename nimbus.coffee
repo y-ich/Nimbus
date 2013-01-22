@@ -103,7 +103,7 @@ handleDropboxError = (error, path = null) ->
             alert 'Authentication is expired. Please sign-in again.'
             $signInout.button 'reset'
         when 403
-            alert 'Sorry, there seems something wrong in software.'
+            # emacs backup file (ex .txt~) cause this for some requests.
             console.error 'Bad OAuth request'
         when 404
             alert 'Sorry, there seems something wrong in software.'
@@ -463,14 +463,22 @@ onClickFileRow = (event) ->
         if $this.hasClass 'info'
             $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
             $fileModal.find('.modal-body').children().remove()
-            $fileModal.modal()
+            $('#open').attr 'disabled', 'disabled'
             spinner.spin document.body
             dropbox.history stat.path, null, (error, stats) ->
                 spinner.stop()
-                makeHistoryList stats
+                if error
+                    handleDropboxError error
+                else
+                    makeHistoryList stats
+                $fileModal.modal 'show'
             directUrl = null
             dropbox.makeUrl stat.path, download: true, (error, url) ->
-                directUrl = url.url
+                if error
+                    handleDropboxError error
+                else
+                    directUrl = url.url
+                    $('#open').removeAttr 'disabled'
         else
             $main.find('tr').removeClass 'info'
             $this.addClass 'info'
@@ -560,6 +568,7 @@ initializeEventHandlers = ->
             spinner.stop()
             if error
                 handleDropboxError error
+                alert 'Link for sharing it is not available.' if error.status = 403
             else
                 $popoverParent.popover
                     placement: 'bottom'

@@ -318,27 +318,29 @@ makeFileList = (stats, order, direction) ->
     $table = $div.children()
     
     th = (key) -> "<th#{if order is key then " class=\"#{direction}\"" else ''}#{if key is 'size' then ' style=\"text-align: right;\"' else ''}><span>#{key}</span></th>"
-    $table.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
+    $table.append "<thead><tr>#{Object.keys(ITEMS).map(th).join('')}</tr></thead>"
             
     stats = stats.sort compareStatBy order, direction
 
+    $tbody = $('<tbody></tbody>')
+    $tbody.on 'click', 'tr', onClickFileRow # enable to click.
     for stat in stats
         $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
         $tr.data 'dropbox-stat', stat
-        $table.append $tr
+        $tbody.append $tr
 
+    $table.append $tbody
     $main.children().remove()
     $main.append $div
-    $table.on 'click', 'tr', onClickFileRow # enable to click.
 
 sortFileList = (order, direction) ->
     ### sorts file list. ###
-
-    $trs = $main.find('table tr:not(:first)')
-    $trs.sort (a, b) ->
-        compareStatBy(order, direction)($(a).data('dropbox-stat'), $(b).data('dropbox-stat'))
+    $tbody = $main.find 'tbody'
+    $trs = $tbody.find 'tr'
     $trs.detach()
-    $trs.appendTo $main.find('table > tbody')
+    $trs.sort (a, b) ->
+        compareStatBy(order, direction) $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
+    $tbody.append $trs
     for className in ['ascending', 'descending']
         $main.find("th.#{className}").removeClass className
     $main.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
@@ -400,21 +402,22 @@ makeHistoryList = (stats) ->
         date: (stat) -> "<td>#{dateString stat.modifiedAt}</td>"
         size: (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"
 
-    $div = $('<div class="touch-scrolling"><table class="table"></table></div>')
-    $table = $div.children()
+    $table = $('<table class="table"></table>')
     
     th = (key) -> "<th><span>#{key}</span></th>"
-    $table.append "<tr>#{Object.keys(ITEMS).map(th).join('')}</tr>"
-            
+    $table.append "<thead><tr>#{Object.keys(ITEMS).map(th).join('')}</tr></thead>"
+
     stats = stats.sort (a, b) -> b.modifiedAt.getTime() - a.modifiedAt.getTime()
 
+    $tbody = $('<tbody></tbody>')
     for stat in stats
         $tr = $("<tr>#{(value(stat) for key, value of ITEMS).join('')}</tr>")
         $tr.data 'dropbox-stat', stat
-        $table.append $tr
-
-    $modalBody = $fileModal.find('.modal-body')
-    $modalBody.append $div
+        $tbody.append $tr
+    $table.append $tbody
+    
+    $fileModal.find('.modal-body').append $table
+    $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
 
 updateBreadcrumbs = (path) ->
     ### udpates breadcrumb of folder path. ###
@@ -533,7 +536,7 @@ initializeEventHandlers = ->
         getAndShowFolder path
         config.set 'currentFolder', path
     
-    $main.on 'click', 'tr:first > th:not(:first)', ->
+    $main.on 'click', 'thead > tr > th:not(:first)', ->
         $this = $(this)
         orderAndDirection = 
             order: $this.children('span').text()
@@ -556,6 +559,7 @@ initializeEventHandlers = ->
 
     $('#menu-upload').on 'click', (event) ->
         event.preventDefault()
+        $(this).parent().parent().pev().focus()
         $('#file-picker').click()
 
     $('#file-picker').on 'change', (event) ->
@@ -605,10 +609,11 @@ initializeEventHandlers = ->
                     $fileModal.modal 'hide'
                     getAndShowFolder config.get 'currentFolder'
 
-    $fileModal.on 'click', 'tr:gt(1)', (event) ->
+    $fileModal.on 'click', 'tbody tr', (event) ->
         $this =$(this)
         $fileModal.find('tr').removeClass 'info'
         $this.addClass 'info'
+        $('#revert').removeAttr 'disabled'
 
     $('#revert').on 'click', (event) ->
         $active = $fileModal.find('tr.info')

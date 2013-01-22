@@ -1,4 +1,4 @@
-@navbar-top-height: 42px;
+@navbar-top-height: 57px;
 @navbar-bottom-height: 57px;
 
 html, body {
@@ -9,20 +9,36 @@ html, body {
     outline: none;
 }
 
+.navbar {
+    margin-bottom: 0px;
+}
+
+.navbar .btn, .navbar .btn-group {
+    margin-bottom: 5px;
+}
+
+.navbar .btn-group .btn {
+    margin-bottom: 0px;
+}
+
+button.close {
+    padding: 12px;
+}
+
 .modal-body {
     -webkit-overflow-scrolling: touch;
 }
 
-.table tbody tr th.ascending, .table tbody tr th.descending {
+.table th.ascending, .table th.descending {
     background-color: #dff0d8;
 }
 
-.table tbody tr th.ascending > span:after {
+.table th.ascending > span:after {
     content: '^';
     float: right;
 }
 
-.table tbody tr th.descending > span:after {
+.table th.descending > span:after {
     content: '^';
     float: right;
     -webkit-transform:rotate(-180deg);

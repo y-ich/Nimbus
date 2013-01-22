@@ -673,19 +673,26 @@ initializeEventHandlers = ->
             $popoverParent = null
 
     xhr = null
+    searchString = null
     $('#search').on 'keyup', ->
+        $this = $(this)
         xhr.abort() if xhr?
-        spinner.spin document.body
-        xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
-            spinner.stop()
-            xhr = null
-            if error
-                handleDropboxError error
-            else
-                if $('#radio-view > button.active').val() is 'coverflow'
-                    makeCoverFlow stats, true
+        xhr = null
+        if $this.val() is ''
+            getAndShowFolder config.get 'currentFolder'
+        else if $this.val() isnt searchString
+            spinner.spin document.body
+            searchString = $this.val()
+            xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
+                spinner.stop()
+                xhr = null
+                if error
+                    handleDropboxError error
                 else
-                    makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
+                    if $('#radio-view > button.active').val() is 'coverflow'
+                        makeCoverFlow stats, true
+                    else
+                        makeFileList stats, config.get('fileList').order, config.get('fileList').direction, true
 
 # main
 unless jasmine?

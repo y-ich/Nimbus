@@ -499,13 +499,11 @@ class PhotoViewerModalController
         prepareViewerModal(stat, metaGroups)
     ###
     constructor: ->
-        @spin = false
         @$viewerModal = $('#viewer-modal')
         @$photoServices = $('#photo-services')
         @$maps = $('#google-maps')
         @$metadata = $('#metadata')
-        @$viewerModal.on 'shown', ->
-            spinner.spin @$viewerModal if @spin
+        @$viewerModal.on 'shown', =>
             if @center? and @maps?
                 google.maps.event.trigger @maps, 'resize' 
                 @maps.setCenter @center
@@ -518,7 +516,7 @@ class PhotoViewerModalController
             @$maps.css 'display', ''
             @center = new google.maps.LatLng metaGroups.gps.latitude.value, metaGroups.gps.longitude.value
             unless @maps?
-                @maps = new google.maps.Map $maps[0], 
+                @maps = new google.maps.Map @$maps[0], 
                     zoom: 16
                     center: @center
                     mapTypeId: google.maps.MapTypeId.ROADMAP
@@ -526,7 +524,7 @@ class PhotoViewerModalController
                 map: @maps
                 position: @center
 
-            @_searchPhotos @center, exifDate2Date metaGroups.exif?.DateTimeOriginal?.value ? null
+            @_searchPhotos @center.lat(), @center.lng(), exifDate2Date metaGroups.exif?.DateTimeOriginal?.value ? null
         else
             @center = null
             @$maps.css 'display', 'none'
@@ -539,19 +537,15 @@ class PhotoViewerModalController
 
     show: -> @$viewerModal.modal 'show'
 
-    spinStart: -> @spin = true
-            
-    spinStop: -> spinner.stop() if @spin
-
-    _searchPhotos: (position) -> # limiting by date if currently disabled.
+    _searchPhotos: (lat, lng) -> # limiting by date if currently disabled.
         flickrSearch
                 ###
                 min_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0) / 1000
                 max_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 99) / 1000
                 ###
                 has_geo: 1
-                lat: center.lat()
-                lon: center.lng()
+                lat: lat
+                lon: lng
                 radius: 5
             , (data) =>
                 return if data.stat is 'fail'
@@ -564,12 +558,12 @@ class PhotoViewerModalController
         earthRadius = 6378.137 # km
         range = 5 # km
         rangeRadian = range / earthRadius
-        lngRangeRadian = rangeRadian / Math.cos(center.lat() * Math.PI / 180)
+        lngRangeRadian = rangeRadian / Math.cos(lat * Math.PI / 180)
         panoramioSearch
-                minx: center.lng() - lngRangeRadian
-                maxx: center.lng() + lngRangeRadian
-                miny: center.lat() - rangeRadian
-                maxy: center.lat() + rangeRadian
+                minx: lng - lngRangeRadian
+                maxx: lng + lngRangeRadian
+                miny: lat - rangeRadian
+                maxy: lat + rangeRadian
             , (data) =>
                 photos = data.photos
                 if photos.length > 0
@@ -577,8 +571,8 @@ class PhotoViewerModalController
                     for i in [0...photos.length]
                         @$photoServices.append "<img src=\"#{photos[i].photo_file_url}\">"
         instajam.media.search
-                lat: center.lat()
-                lng: center.lng()
+                lat: lat
+                lng: lng
             , (result) => 
                 if result instanceof Error
                     console.error result
@@ -597,9 +591,9 @@ preview = (stat, link) ->
         when 'jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'
             $viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
             $viewer.fadeIn()
-            viewerModalController.spinStart()
+            spinner.spin $('#button-info')[0]
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
-                viewerModalController.spinStop()
+                spinner.stop()
                 # $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
                 jpeg = new JpegMeta.JpegFile string, stat.name
                 viewerModalController.prepareViewerModal stat, jpeg.metaGroups

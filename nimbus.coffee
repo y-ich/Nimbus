@@ -26,7 +26,6 @@ dropbox = null
 directUrl = null
 currentStats = null
 spinner = null
-maps = null
 center = null
 mainViewController = null
 fileModalController = null
@@ -34,7 +33,6 @@ fileModalController = null
 $signInout = null
 $breadcrumbs = null
 $viewer = null
-$viewerModal = null
 $popoverParent = null
 
 # general functions
@@ -166,6 +164,7 @@ compareStatBy = (order, direction) ->
 
 exifDate2Date = (str) ->
     ### returns JavaScript Date understandable date string from EXIF DateTime format. ###
+    return null unless str?
     new Date Date.parse str.replace(/^(\d+):(\d+):(\d+)/, '$1/$2/$3') + ' UTC'
 
 # service interfaces
@@ -214,6 +213,13 @@ class PersistentObject
 # DOM manupulations
 
 class MainViewController
+    ###
+    is responsible for view of file list, list operations, and a button for switching view.
+    public methods are,
+        updateView(stats) - update view according to stats
+        enableClick - enable rows and anchors to click
+        disableClick - disable rows and anchors to click
+    ###
     constructor: ->
         _self = this
         @stats = null
@@ -387,10 +393,13 @@ class MainViewController
                     preview stat, link
                 else if stat.isFolder
                     getAndShowFolder stat.path
-        
-    
 
 class FileModalController
+    ###
+    is resonsible for information modal window for each file.
+    public method is
+        open(stat) - opens information modal window for stat.
+    ###
     constructor: ->
         @$fileModal = $('#file-modal')
         $fileModal = @$fileModal
@@ -427,7 +436,7 @@ class FileModalController
                     dropbox.history stat.path, null, (error, stats) ->
                         spinner.stop()
                         $fileModal.find('.modal-body').empty()
-                        FileModalController.makeHistoryList stats
+                        FileModalController._makeHistoryList stats
 
         $fileModal.on 'click', 'tbody tr', (event) ->
             $this =$(this)
@@ -449,7 +458,7 @@ class FileModalController
             if error
                 handleDropboxError error
             else
-                FileModalController.makeHistoryList stats
+                FileModalController._makeHistoryList stats
             $fileModal.modal 'show'
         directUrl = null
         dropbox.makeUrl stat.path, download: true, (error, url) ->
@@ -459,7 +468,7 @@ class FileModalController
                 directUrl = url.url
                 $('#open').removeAttr 'disabled'
 
-    @makeHistoryList: (stats) ->
+    @_makeHistoryList: (stats) ->
         ### prepares file history list. ###
         ITEMS = [
             ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
@@ -483,81 +492,101 @@ class FileModalController
         $('#file-modal .modal-body').append $table
         $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
 
-
-
-prepareViewerModal = (stat, metaGroups) ->
-    $photoServices = $('#photo-services')
-    $photoServices.empty()
-    $photoServices.prev().css 'display', 'none'
-    $maps = $('#google-maps')
-    $viewerModal.find('h3').html "<img src=\"#{thumbnailUrl stat, 'm'}\">#{stat.name}"
-    if metaGroups.gps?
-        $maps.css 'display', ''
-        center = new google.maps.LatLng metaGroups.gps.latitude.value, metaGroups.gps.longitude.value
-        if maps?
-            maps.setCenter center
-        else
-            maps = new google.maps.Map $maps[0], 
-                zoom: 16
-                center: center
-                mapTypeId: google.maps.MapTypeId.ROADMAP
+class PhotoViewerModalController
+    ###
+    is resposible for viewer modal window for photos.
+    public method is,
+        prepareViewerModal(stat, metaGroups)
+    ###
+    constructor: ->
+        @spin = false
+        @$viewerModal = $('#viewer-modal')
+        @$photoServices = $('#photo-services')
+        @$maps = $('#google-maps')
+        @$metadata = $('#metadata')
+        @$viewerModal.on 'shown', ->
+            spinner.spin @$viewerModal if @spin
+            if @center? and @maps?
+                google.maps.event.trigger @maps, 'resize' 
+                @maps.setCenter @center
+        
+    prepareViewerModal: (stat, metaGroups) ->
+        @$photoServices.empty()
+        @$photoServices.prev().css 'display', 'none'
+        @$viewerModal.find('h3').html "<img src=\"#{thumbnailUrl stat, 'm'}\">#{stat.name}"
+        if metaGroups.gps?
+            @$maps.css 'display', ''
+            @center = new google.maps.LatLng metaGroups.gps.latitude.value, metaGroups.gps.longitude.value
+            unless @maps?
+                @maps = new google.maps.Map $maps[0], 
+                    zoom: 16
+                    center: @center
+                    mapTypeId: google.maps.MapTypeId.ROADMAP
             marker = new google.maps.Marker
-                map: maps
-                position: center
+                map: @maps
+                position: @center
 
-        if metaGroups.exif?.DateTimeOriginal?.value?
-            date = exifDate2Date metaGroups.exif.DateTimeOriginal.value
-            flickrSearch
-                    ###
-                    min_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0) / 1000
-                    max_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 99) / 1000
-                    ###
-                    has_geo: 1
-                    lat: center.lat()
-                    lon: center.lng()
-                    radius: 5
-                , (data) ->
-                    return if data.stat is 'fail'
-                    photos = data.photos.photo
-                    if photos.length > 0
-                        $photoServices.prev().css 'display', 'block'
-                        for i in [0...photos.length]
-                            $photoServices.append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
+            @_searchPhotos @center, exifDate2Date metaGroups.exif?.DateTimeOriginal?.value ? null
+        else
+            @center = null
+            @$maps.css 'display', 'none'
 
-            earthRadius = 6378.137 # km
-            range = 5 # km
-            rangeRadian = range / earthRadius
-            lngRangeRadian = rangeRadian / Math.cos(center.lat() * Math.PI / 180)
-            panoramioSearch
-                    minx: center.lng() - lngRangeRadian
-                    maxx: center.lng() + lngRangeRadian
-                    miny: center.lat() - rangeRadian
-                    maxy: center.lat() + rangeRadian
-                , (data) ->
-                    photos = data.photos
-                    if photos.length > 0
-                        $photoServices.prev().css 'display', 'block'
-                        for i in [0...photos.length]
-                            $photoServices.append "<img src=\"#{photos[i].photo_file_url}\">"
-            instajam.media.search
-                    lat: center.lat()
-                    lng: center.lng()
-                , (result) -> 
-                    if result instanceof Error
-                        console.error result
-                    else
-                        if result.data.length > 0
-                            $photoServices.prev().css 'display', 'block'
-                            $photoServices.append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
-    else
-        $maps.css 'display', 'none'
+        @$metadata.empty()
+        for key, value of metaGroups
+            for k, v of value when v instanceof JpegMeta.MetaProp
+                @$metadata.append "<dt>#{v.description}</dt>"
+                @$metadata.append "<dd>#{v.value}</dd>"
 
-    $metadata = $('#metadata')
-    $metadata.empty()
-    for key, value of metaGroups
-        for k, v of value when v instanceof JpegMeta.MetaProp
-            $metadata.append "<dt>#{v.description}</dt>"
-            $metadata.append "<dd>#{v.value}</dd>"
+    show: -> @$viewerModal.modal 'show'
+
+    spinStart: -> @spin = true
+            
+    spinStop: -> spinner.stop() if @spin
+
+    _searchPhotos: (position) -> # limiting by date if currently disabled.
+        flickrSearch
+                ###
+                min_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0) / 1000
+                max_taken_date: Math.floor new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 99) / 1000
+                ###
+                has_geo: 1
+                lat: center.lat()
+                lon: center.lng()
+                radius: 5
+            , (data) =>
+                return if data.stat is 'fail'
+                photos = data.photos.photo
+                if photos.length > 0
+                    @$photoServices.prev().css 'display', 'block'
+                    for i in [0...photos.length]
+                        @$photoServices.append "<img src=\"http://static.flickr.com/#{photos[i].server}/#{photos[i].id}_#{photos[i].secret}_s.jpg\">"
+
+        earthRadius = 6378.137 # km
+        range = 5 # km
+        rangeRadian = range / earthRadius
+        lngRangeRadian = rangeRadian / Math.cos(center.lat() * Math.PI / 180)
+        panoramioSearch
+                minx: center.lng() - lngRangeRadian
+                maxx: center.lng() + lngRangeRadian
+                miny: center.lat() - rangeRadian
+                maxy: center.lat() + rangeRadian
+            , (data) =>
+                photos = data.photos
+                if photos.length > 0
+                    @$photoServices.prev().css 'display', 'block'
+                    for i in [0...photos.length]
+                        @$photoServices.append "<img src=\"#{photos[i].photo_file_url}\">"
+        instajam.media.search
+                lat: center.lat()
+                lng: center.lng()
+            , (result) => 
+                if result instanceof Error
+                    console.error result
+                else
+                    if result.data.length > 0
+                        @$photoServices.prev().css 'display', 'block'
+                        @$photoServices.append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
+        
     
 preview = (stat, link) ->
     ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 
@@ -568,12 +597,12 @@ preview = (stat, link) ->
         when 'jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'
             $viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
             $viewer.fadeIn()
-            spinner.spin $viewerModal[0]
+            viewerModalController.spinStart()
             dropbox.readFile stat.path, binary: true, (error, string, stat) ->
-                spinner.stop()
+                viewerModalController.spinStop()
                 # $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
                 jpeg = new JpegMeta.JpegFile string, stat.name
-                prepareViewerModal stat, jpeg.metaGroups
+                viewerModalController.prepareViewerModal stat, jpeg.metaGroups
                 $('#button-info').removeAttr 'disabled'
         when 'png', 'gif'
             $viewer.css 'background-image', "url(\"#{link}\")"
@@ -732,15 +761,10 @@ initializeEventHandlers = ->
 
     $('#button-info').on 'click', (event) ->
         event.stopPropagation() # prevent to click $viewer.
-        $viewerModal.modal 'show'
+        viewerModalController.show()
 
     $viewer.on 'click', (event) ->
         $viewer.fadeOut()
-
-    $viewerModal.on 'shown', ->
-        if maps?
-            google.maps.event.trigger maps, 'resize' 
-            maps.setCenter center
 
     # search
     xhr = null
@@ -768,10 +792,10 @@ unless jasmine?
     spinner = new Spinner()
     mainViewController = new MainViewController()
     fileModalController = new FileModalController()
+    viewerModalController = new PhotoViewerModalController()
     $signInout = $('#sign-inout')
     $breadcrumbs = $('#footer .breadcrumb')
     $viewer = $('#viewer')
-    $viewerModal = $('#viewer-modal')
     instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID
     config = PersistentObject.restore 'nimbus-config',
         currentFolder: '/'

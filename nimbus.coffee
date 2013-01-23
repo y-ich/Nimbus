@@ -30,8 +30,6 @@ center = null
 mainViewController = null
 fileModalController = null
 viewerController = null
-# view
-$signInout = null
 
 # general functions
 
@@ -768,11 +766,13 @@ class PhotoViewerModalController
 
 initializeDropbox = ->
     ###
-    0. disable Dropbox related buttons.
-    1. prepares Dropbox Client instance.
-    2. checks URL. if it includes not_approved=true, a user rejected authentication request. Does nothing.
-    3. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
+    1. check forwarded result.
+    2. disable Dropbox related buttons.
+    3. prepares Dropbox Client instance.
+    4. if not approved, a user rejected authentication request. Does nothing.
+    5. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
     ###
+    notApproved = /not_approved=true/.test location.toString()
     $signInout = $('#sign-inout')
 
     $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
@@ -781,7 +781,7 @@ initializeDropbox = ->
         sandbox: false
     dropbox.authDriver new Dropbox.Drivers.Redirect rememberUser: true
     
-    return if /not_approved=true/.test location.toString() # if redirect result shows that a user rejected
+    return if notApproved
 
     try
         for key, value of localStorage when /^dropbox-auth/.test(key) and JSON.parse(value).key is dropbox.oauth.key
@@ -797,6 +797,8 @@ initializeDropbox = ->
             break
     catch error
         console.log error
+
+    window.history.replaceState null, null, location.pathname # clear forwarded query parameter
 
 
 # main

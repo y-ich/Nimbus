@@ -29,6 +29,7 @@ spinner = null
 center = null
 mainViewController = null
 fileModalController = null
+viewerController = null
 # view
 $signInout = null
 $breadcrumbs = null
@@ -288,8 +289,6 @@ class MainViewController
             if $selected? and not $(event.target).hasClass 'popover-content'
                 $selected.popover 'destroy'
                 $selected = null
-                # no action except for canceling. not perfect. your must prevent actions of other touch/mouce events.
-                event.stopPropagation()
                 event.preventDefault()
 
     updateView: (@stats, search = false) ->
@@ -415,7 +414,7 @@ class MainViewController
             @on 'click', (index, link) ->
                 stat = @config.playlist[index].stat
                 if link?
-                    preview stat, link
+                    viewerController.preview stat, link
                 else if stat.isFolder
                     getAndShowFolder stat.path
 
@@ -430,7 +429,7 @@ class FileModalController
         $fileModal = @$fileModal
         $('#open').on 'click', (event) ->
             stat = $('#file-list > tbody > tr.info').data 'dropbox-stat'
-            preview stat, directUrl
+            viewerController.preview stat, directUrl
             $fileModal.modal 'hide'
 
         $('#delete').on 'click', (event) ->
@@ -517,6 +516,45 @@ class FileModalController
         $('#file-modal .modal-body').append $table
         $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
 
+class ViewerController
+    constructor: (@modalController) ->
+        @$viewer = $('#viewer')
+        
+        $('#button-info').on 'click', (event) =>
+            @modalController.show()
+
+        $('#viewer > .close').on 'click', (event) ->
+            $(this).parent().fadeOut()
+
+    preview: (stat, link) ->
+        ###
+        For pictures, it shows preview and prepares information modal window.
+        For others, suggests to open new browser tab or window to show.
+        ### 
+        @$viewer.css 'background-image', ''
+        $('#button-info').attr 'disabled', 'disabled'
+    
+        switch getExtension(stat.name).toLowerCase()
+            when 'jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'
+                @$viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
+                @$viewer.fadeIn()
+                spinner.spin $('#button-info')[0]
+                dropbox.readFile stat.path, binary: true, (error, string, stat) =>
+                    spinner.stop()
+                    # @$viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
+                    jpeg = new JpegMeta.JpegFile string, stat.name
+                    @modalController.prepareViewerModal stat, jpeg.metaGroups
+                    $('#button-info').removeAttr 'disabled'
+            when 'png', 'gif'
+                @$viewer.css 'background-image', "url(\"#{link}\")"
+                @$viewer.fadeIn()
+            else
+                spinner.spin document.body
+                dropbox.makeUrl stat.path, download: true, (error, url) ->
+                    spinner.stop()
+                    bootbox.confirm 'Do you want to open in new tab?', (result) ->
+                        window.open url.url if result
+                
 class PhotoViewerModalController
     ###
     is resposible for viewer modal window for photos.
@@ -607,36 +645,6 @@ class PhotoViewerModalController
                         @$photoServices.append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
         
     
-preview = (stat, link) ->
-    ###
-    For pictures, it shows preview and prepares information modal window.
-    For others, suggests to open new browser tab or window to show.
-    ### 
-    $viewer = $('#viewer')
-    $viewer.css 'background-image', ''
-    $('#button-info').attr 'disabled', 'disabled'
-    
-    switch getExtension(stat.name).toLowerCase()
-        when 'jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'
-            $viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
-            $viewer.fadeIn()
-            spinner.spin $('#button-info')[0]
-            dropbox.readFile stat.path, binary: true, (error, string, stat) ->
-                spinner.stop()
-                # $viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
-                jpeg = new JpegMeta.JpegFile string, stat.name
-                viewerModalController.prepareViewerModal stat, jpeg.metaGroups
-                $('#button-info').removeAttr 'disabled'
-        when 'png', 'gif'
-            $viewer.css 'background-image', "url(\"#{link}\")"
-            $viewer.fadeIn()
-        else
-            spinner.spin document.body
-            dropbox.makeUrl stat.path, download: true, (error, url) ->
-                spinner.stop()
-                bootbox.confirm 'Do you want to open in new tab?', (result) ->
-                    window.open url.url if result
-                
 getAndShowFolder = (path) ->
     ### gets and shows folder content. ###
     path ?= config.get 'currentFolder'
@@ -757,13 +765,6 @@ initializeEventHandlers = ->
             else
                 getAndShowFolder()
 
-    $('#button-info').on 'click', (event) ->
-        event.stopPropagation() # prevent to click $viewer.
-        viewerModalController.show()
-
-    $('#viewer > .close').on 'click', (event) ->
-        $(this).parent().fadeOut()
-
     # search
     xhr = null
     searchString = null
@@ -790,7 +791,7 @@ unless jasmine?
     spinner = new Spinner()
     mainViewController = new MainViewController()
     fileModalController = new FileModalController()
-    viewerModalController = new PhotoViewerModalController()
+    viewerController = new ViewerController new PhotoViewerModalController()
     $signInout = $('#sign-inout')
     $breadcrumbs = $('#footer .breadcrumb')
     instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID

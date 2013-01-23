@@ -380,29 +380,37 @@ class MainViewController
             config.set 'fileList', orderAndDirection
             _self._sortFileList orderAndDirection.order, orderAndDirection.direction    
 
-        $selected = null
+        $popovered = null
         $('#share').on 'click', (event) ->
-            $selected = _self.$tbody.children 'tr.info'
-            return if $selected.length == 0
-            stat = $selected.data 'dropbox-stat'
-            spinner.spin document.body
-            dropbox.makeUrl stat.path, null, (error, url) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                    alert 'Link for sharing it is not available.' if error.status = 403
-                else
-                    $selected.popover
-                        placement: 'bottom'
-                        trigger: 'manual'
-                        title: '' # no title for copy & paste
-                        content: url.url
-                    $selected.popover 'show'
+            $popovered = _self.$tbody.children 'tr.info'
+            if $popovered.length == 0
+                $popovered = $(this)
+                $popovered.popover
+                    placement: 'bottom'
+                    trigger: 'manual'
+                    title: 'How to share' # no title for copy & paste
+                    content: 'Select a file and touch this button!'
+                $popovered.popover 'show'                
+            else
+                stat = $popovered.data 'dropbox-stat'
+                spinner.spin document.body
+                dropbox.makeUrl stat.path, null, (error, url) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                        alert 'Link for sharing it is not available.' if error.status = 403
+                    else
+                        $popovered.popover
+                            placement: 'bottom'
+                            trigger: 'manual'
+                            title: '' # no title for copy & paste
+                            content: url.url
+                        $popovered.popover 'show'
         # cancel popover for sharing
         $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
-            if $selected? and not $(event.target).hasClass 'popover-content'
-                $selected.popover 'destroy'
-                $selected = null
+            if $popovered? and not $(event.target).hasClass 'popover-content'
+                $popovered.popover 'destroy'
+                $popovered = null
                 event.preventDefault()
 
     updateView: (@stats, search = false) ->

@@ -820,6 +820,11 @@ initializeDropbox = ->
 
 # main
 unless jasmine?
+    config = PersistentObject.restore 'nimbus-config',
+        currentFolder: '/'
+        fileList:
+            order: 'name'
+            direction: 'ascending'
     new NoClickDelay document.body, ['BUTTON', 'A', 'INPUT', 'TH', 'TR']
     spinner = new Spinner()
     panelController = new PanelController()
@@ -827,9 +832,4 @@ unless jasmine?
     fileModalController = new FileModalController()
     viewerController = new ViewerController new PhotoViewerModalController()
     instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID
-    config = PersistentObject.restore 'nimbus-config',
-        currentFolder: '/'
-        fileList:
-            order: 'name'
-            direction: 'ascending'
     initializeDropbox()

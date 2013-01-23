@@ -1,9 +1,6 @@
 ###
-# Controller for dropbox-js
-# dependencies: dropbox-js.js, jquery.js, spin.js
-# usage:
-#  1. prepare view (button for sign-in and sign-out, table for file list)
-# (C) 2012-2013 ICHIKAWA, Yuji (New 3 Rs)
+# Dropbox filer by web app
+(C) 2012-2013 ICHIKAWA, Yuji (New 3 Rs)
 ###
 
 # global variables
@@ -188,33 +185,18 @@ panoramioSearch = (param, callback) ->
     param[key] ?= value for key, value of defaultQuery
     $.getJSON "http://www.panoramio.com/map/get_panoramas.php?#{obj2query param}&callback=?", null, callback
 
-# utility classes for app
+# Controllers
 
-class PersistentObject
-    @restore: (key, defaultValue = {}) ->
-        restored = JSON.parse localStorage[key] ? '{}'
-        for k, v of defaultValue
-            restored[k] ?= v
-        new PersistentObject key, restored
-
-    constructor: (@key, @object) ->
-        localStorage[@key] = JSON.stringify @object
-
-    get: (key) -> @object[key]
-
-    set: (key, value) ->
-        @object[key] = value
-        localStorage[@key] = JSON.stringify @object
-
-# DOM manupulations
-
-  
 class PanelController
+    ###
+    Controller for top-level UI
+    It is responsible for sign-in/out button, breadcrumbs for folder path, new folder menu, upload menu, and search.
+    ###
     constructor: ->
-        @$breadcrumbs = $('#footer .breadcrumb')
         _self = this
-        $signInout = $('#sign-inout')
+        @$breadcrumbs = $('#footer .breadcrumb')
 
+        $signInout = $('#sign-inout')
         $signInout.on 'click', ->
             spinner.spin document.body
             if $signInout.text() is 'sign-in'
@@ -236,18 +218,17 @@ class PanelController
                         $signInout.button 'reset'
                         $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
 
-        @$breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
-            event.preventDefault()
+        @$breadcrumbs.on 'click', 'li:not(.active) > a', ->
             $this = $(this)
             $this.parent().nextUntil().remove() # removes descendent folders.
             $this.parent().addClass 'active'
             path = $this.data 'path'
             _self.getAndShowFolder path
-    
-        $('#menu-new-folder').on 'click', (event) ->
-            event.preventDefault()
+            false
+
+        $('#menu-new-folder').on 'click', ->
             name = prompt 'Folder Name'
-            return unless name and name isnt ''
+            return false unless name and name isnt ''
 
             spinner.spin document.body
             dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
@@ -256,23 +237,28 @@ class PanelController
                     handleDropboxError error
                 else
                     _self.getAndShowFolder()
+            false
 
-        $('#menu-upload').on 'click', (event) ->
-            event.preventDefault()
-            $(this).parent().parent().pev().focus()
-            $('#file-picker').click()
+        # upload
 
-        $('#file-picker').on 'change', (event) ->
-            file = event.target.files[0]
+        $filePicker = $('#file-picker')
+        $('#menu-upload').on 'click', ->
+            $(this).parent().parent().prev().focus() # focus to the button.
+            $filePicker.click()
+            false
+
+        $filePicker.on 'change', (event) ->
             spinner.spin document.body
-            dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                else
-                    _self.getAndShowFolder()
+            for file in @files
+                dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        _self.getAndShowFolder()
 
         # search
+
         xhr = null
         searchString = null
         $('#search').on 'keyup', ->
@@ -280,20 +266,20 @@ class PanelController
             xhr.abort() if xhr?
             xhr = null
             if $this.val() is ''
-                _self.getAndShowFolder()
+                _self.getAndShowFolder() # if search field is empty, then show current folder.
             else if $this.val() isnt searchString
                 spinner.spin document.body
                 searchString = $this.val()
-                xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
-                    xhr = null
+                xhr = dropbox.findByName '', searchString, null, (error, stats) ->
                     if error
                         handleDropboxError error
                     else
                         mainViewController.updateView stats, true
                     spinner.stop()
+                    xhr = null
 
     getAndShowFolder: (path) =>
-        ### gets and shows folder content. ###
+        ### gets and shows folder content. path is a folder path. If it is not given, current folder will be shown. ###
         path ?= config.get 'currentFolder'
         spinner.spin document.body
         mainViewController.disableClick()
@@ -773,6 +759,24 @@ class PhotoViewerModalController
                         @$photoServices.prev().css 'display', 'block'
                         @$photoServices.append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
 
+# utility classes for app
+
+class PersistentObject
+    @restore: (key, defaultValue = {}) ->
+        restored = JSON.parse localStorage[key] ? '{}'
+        for k, v of defaultValue
+            restored[k] ?= v
+        new PersistentObject key, restored
+
+    constructor: (@key, @object) ->
+        localStorage[@key] = JSON.stringify @object
+
+    get: (key) -> @object[key]
+
+    set: (key, value) ->
+        @object[key] = value
+        localStorage[@key] = JSON.stringify @object
+
 initializeDropbox = ->
     ###
     1. check forwarded result.
@@ -795,10 +799,12 @@ initializeDropbox = ->
     try
         for key, value of localStorage when /^dropbox-auth/.test(key) and JSON.parse(value).key is dropbox.oauth.key
             $signInout.button 'loading'
+            $signInout.removeClass 'btn-primary'
             dropbox.authenticate (error, client) ->
                 if error
                     handleDropboxError error 
                     $signInout.button 'reset'
+                    $signInout.addClass 'btn-primary'
                 else
                     $signInout.button 'signout'
                     $('#header button:not(#sign-inout)').removeAttr 'disabled'

@@ -215,7 +215,7 @@ class PersistentObject
 
 class MainViewController
     constructor: ->
-        self = this
+        _self = this
         @stats = null
         @coverflow = null
         @$fileList = $('#file-list')
@@ -223,6 +223,27 @@ class MainViewController
         @$thead = @$fileList.children 'thead'
         # don't use variable of $('#coverflow'). $('#coverflow') is not static due to coverflow.js.
 
+        @_onClickFileRow = (event) ->
+            ### event handler for file list. ###
+            $this =$(this)
+            stat = $this.data 'dropbox-stat'
+            if not stat?
+                return
+            if stat.isFile
+                if $this.hasClass 'info'
+                    _self.disableClick() # prevents malfunction due to double click
+                    fileModalController.open stat
+                else
+                    _self.$tbody.children().removeClass 'info'
+                    $this.addClass 'info'
+            else if stat.isFolder
+                getAndShowFolder stat.path
+
+        @_onClickFileAnchor = (event) ->
+            path = $(this).text()
+            getAndShowFolder path
+            event.preventDefault()
+        
         if @_viewMode() is 'list'
             @$fileList.parent().css 'display', 'block'
             $('#coverflow').css 'display', 'none'
@@ -230,7 +251,7 @@ class MainViewController
             @$fileList.parent().css 'display', 'none'
             $('#coverflow').css 'display', 'block'
                 
-        $('#radio-view > button').on 'click', -> self._switchView $(this).val()
+        $('#radio-view > button').on 'click', -> _self._switchView $(this).val()
 
         @$thead.children().on 'click', 'th:not(:first)', ->
             $this = $(this)
@@ -238,7 +259,7 @@ class MainViewController
                 order: $this.children('span').text()
                 direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
             config.set 'fileList', orderAndDirection
-            self._sortFileList orderAndDirection.order, orderAndDirection.direction    
+            _self._sortFileList orderAndDirection.order, orderAndDirection.direction    
 
     updateView: (@stats, search = false) ->
         if @_viewMode() is 'coverflow'
@@ -249,12 +270,12 @@ class MainViewController
             @_clearCoverFlow()
 
     enableClick: ->
-        @$tbody.on 'click', 'tr', onClickFileRow
-        @$tbody.on 'click', 'a', onClickFileAnchor
+        @$tbody.on 'click', 'tr', @_onClickFileRow
+        @$tbody.on 'click', 'a', @_onClickFileAnchor
         
     disableClick: ->
-        @$tbody.off 'click', 'tr', onClickFileRow
-        @$tbody.off 'click', 'a', onClickFileAnchor
+        @$tbody.off 'click', 'tr', @_onClickFileRow
+        @$tbody.off 'click', 'a', @_onClickFileAnchor
 
     _viewMode: -> $('#radio-view > button.active').val()
         
@@ -367,25 +388,6 @@ class MainViewController
                 else if stat.isFolder
                     getAndShowFolder stat.path
         
-onClickFileRow = (event) ->
-    ### event handler for file list. ###
-    $this =$(this)
-    stat = $this.data 'dropbox-stat'
-    if not stat?
-        return
-    if stat.isFile
-        if $this.hasClass 'info'
-            fileModalController.open stat
-        else
-            mainViewController.$tbody.children().removeClass 'info'
-            $this.addClass 'info'
-    else if stat.isFolder
-        getAndShowFolder stat.path
-
-onClickFileAnchor = (event) ->
-    path = $(this).text()
-    getAndShowFolder path
-    event.preventDefault()
     
 
 class FileModalController
@@ -425,13 +427,16 @@ class FileModalController
                     dropbox.history stat.path, null, (error, stats) ->
                         spinner.stop()
                         $fileModal.find('.modal-body').empty()
-                        makeHistoryList stats
+                        FileModalController.makeHistoryList stats
 
         $fileModal.on 'click', 'tbody tr', (event) ->
             $this =$(this)
             $fileModal.find('tr').removeClass 'info'
             $this.addClass 'info'
             $('#revert').removeAttr 'disabled'
+
+        $fileModal.on 'hidden', (event) ->
+            mainViewController.enableClick()
 
     open: (stat) ->
         $fileModal = @$fileModal
@@ -444,7 +449,7 @@ class FileModalController
             if error
                 handleDropboxError error
             else
-                makeHistoryList stats
+                FileModalController.makeHistoryList stats
             $fileModal.modal 'show'
         directUrl = null
         dropbox.makeUrl stat.path, download: true, (error, url) ->
@@ -454,29 +459,29 @@ class FileModalController
                 directUrl = url.url
                 $('#open').removeAttr 'disabled'
 
-makeHistoryList = (stats) ->
-    ### prepares file history list. ###
-    ITEMS = [
-        ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
-        ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"]
-    ]
+    @makeHistoryList: (stats) ->
+        ### prepares file history list. ###
+        ITEMS = [
+            ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
+            ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"]
+        ]
 
-    $table = $('<table class="table"></table>')
+        $table = $('<table class="table"></table>')
     
-    th = (key) -> "<th#{if key is 'size' then ' style="text-align: right;"' else ''}><span>#{key}</span></th>"
-    $table.append "<thead><tr>#{ITEMS.map((e) -> th e[0]).join('')}</tr></thead>"
+        th = (key) -> "<th#{if key is 'size' then ' style="text-align: right;"' else ''}><span>#{key}</span></th>"
+        $table.append "<thead><tr>#{ITEMS.map((e) -> th e[0]).join('')}</tr></thead>"
 
-    stats = stats.sort (a, b) -> b.modifiedAt.getTime() - a.modifiedAt.getTime()
+        stats = stats.sort (a, b) -> b.modifiedAt.getTime() - a.modifiedAt.getTime()
 
-    $tbody = $('<tbody></tbody>')
-    for stat in stats
-        $tr = $("<tr>#{ITEMS.map((e) -> e[1] stat).join('')}</tr>")
-        $tr.data 'dropbox-stat', stat
-        $tbody.append $tr
-    $table.append $tbody
+        $tbody = $('<tbody></tbody>')
+        for stat in stats
+            $tr = $("<tr>#{ITEMS.map((e) -> e[1] stat).join('')}</tr>")
+            $tr.data 'dropbox-stat', stat
+            $tbody.append $tr
+        $table.append $tbody
     
-    $('#file-modal .modal-body').append $table
-    $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
+        $('#file-modal .modal-body').append $table
+        $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
 
 
 

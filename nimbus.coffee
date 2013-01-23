@@ -659,12 +659,21 @@ class ViewerController
                 @$viewer.css 'background-image', "url(\"#{thumbnailUrl stat, 'xl'}\")"
                 @$viewer.fadeIn()
                 spinner.spin $('#button-info')[0]
-                dropbox.readFile stat.path, binary: true, (error, string, stat) =>
-                    spinner.stop()
-                    # @$viewer.css 'background-image', "url(\"data:image/jpeg;base64,#{btoa string}\")"
-                    jpeg = new JpegMeta.JpegFile string, stat.name
-                    @modalController.prepareViewerModal stat, jpeg.metaGroups
-                    $('#button-info').removeAttr 'disabled'
+                xhr = dropbox.readFile stat.path, binary: true, -> spinner.stop()
+                xhr.onprogress = =>
+                    dirtyText = if xhr.responseText? then xhr.responseText else xhr.response
+                    bytes = []
+                    for i in [0...dirtyText.length]
+                      bytes.push String.fromCharCode(dirtyText.charCodeAt(i) & 0xFF)
+                    text = bytes.join ''
+                    try
+                        jpeg = new JpegMeta.JpegFile text, stat.name
+                        # No error means enough to retrieve metadata.
+                        xhr.abort()
+                        spinner.stop()
+                        @modalController.prepareViewerModal stat, jpeg.metaGroups
+                        $('#button-info').removeAttr 'disabled'
+                    catch error
             when 'png', 'gif'
                 @$viewer.css 'background-image', "url(\"#{link}\")"
                 @$viewer.fadeIn()

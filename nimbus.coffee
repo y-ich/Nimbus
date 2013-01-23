@@ -32,7 +32,6 @@ fileModalController = null
 viewerController = null
 # view
 $signInout = null
-$breadcrumbs = null
 
 # general functions
 
@@ -211,6 +210,121 @@ class PersistentObject
 
 # DOM manupulations
 
+  
+class PanelController
+    constructor: ->
+        @$breadcrumbs = $('#footer .breadcrumb')
+        _self = this
+        $signInout = $('#sign-inout')
+
+        $signInout.on 'click', ->
+            spinner.spin document.body
+            if $signInout.text() is 'sign-in'
+                $signInout.button 'loading'
+                dropbox.reset()
+                dropbox.authenticate (error, client) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        $signInout.button 'signout'
+                        $('#header button:not(#sign-inout)').removeAttr 'disabled'
+            else
+                dropbox.signOut (error) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        $signInout.button 'reset'
+                        $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
+
+        @$breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
+            event.preventDefault()
+            $this = $(this)
+            $this.parent().nextUntil().remove() # removes descendent folders.
+            $this.parent().addClass 'active'
+            path = $this.data 'path'
+            _self.getAndShowFolder path
+    
+        $('#menu-new-folder').on 'click', (event) ->
+            event.preventDefault()
+            name = prompt 'Folder Name'
+            return unless name and name isnt ''
+
+            spinner.spin document.body
+            dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
+                spinner.stop()
+                if error
+                    handleDropboxError error
+                else
+                    _self.getAndShowFolder()
+
+        $('#menu-upload').on 'click', (event) ->
+            event.preventDefault()
+            $(this).parent().parent().pev().focus()
+            $('#file-picker').click()
+
+        $('#file-picker').on 'change', (event) ->
+            file = event.target.files[0]
+            spinner.spin document.body
+            dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
+                spinner.stop()
+                if error
+                    handleDropboxError error
+                else
+                    _self.getAndShowFolder()
+
+        # search
+        xhr = null
+        searchString = null
+        $('#search').on 'keyup', ->
+            $this = $(this)
+            xhr.abort() if xhr?
+            xhr = null
+            if $this.val() is ''
+                _self.getAndShowFolder()
+            else if $this.val() isnt searchString
+                spinner.spin document.body
+                searchString = $this.val()
+                xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
+                    xhr = null
+                    if error
+                        handleDropboxError error
+                    else
+                        mainViewController.updateView stats, true
+                    spinner.stop()
+
+    getAndShowFolder: (path) =>
+        ### gets and shows folder content. ###
+        path ?= config.get 'currentFolder'
+        spinner.spin document.body
+        mainViewController.disableClick()
+        dropbox.readdir path, null, (error, names, stat, stats) =>
+            spinner.stop()
+            if error
+                handleDropboxError error
+            else
+                config.set 'currentFolder', path
+                @_updateBreadcrumbs path
+                mainViewController.updateView stats, false
+
+    _updateBreadcrumbs: (path) ->
+        ### udpates breadcrumb of folder path. ###
+        @$breadcrumbs.empty()
+        for e, i in ancestorFolders path
+            if i == 0
+                @$breadcrumbs.append '<li><a href="#" data-path="/">Home</a></li>'
+            else
+                name = e.replace /^.*\//, ''
+                @$breadcrumbs.append """
+                    <li>
+                        <span class="divider">/</span>
+                        <a href="#" data-path="#{e}">#{name}</a>
+                    </li>
+                    """
+        @$breadcrumbs.children('li:last-child').addClass 'active'
+
+
 class MainViewController
     ###
     is responsible for view of file list, list operations, and a button for switching view.
@@ -242,11 +356,11 @@ class MainViewController
                     _self.$tbody.children().removeClass 'info'
                     $this.addClass 'info'
             else if stat.isFolder
-                getAndShowFolder stat.path
+                panelController.getAndShowFolder stat.path
 
         @_onClickFileAnchor = (event) ->
             path = $(this).text()
-            getAndShowFolder path
+            panelController.getAndShowFolder path
             event.preventDefault()
         
         if @_viewMode() is 'list'
@@ -416,7 +530,7 @@ class MainViewController
                 if link?
                     viewerController.preview stat, link
                 else if stat.isFolder
-                    getAndShowFolder stat.path
+                    panelController.getAndShowFolder stat.path
 
 class FileModalController
     ###
@@ -442,7 +556,7 @@ class FileModalController
                         handleDropboxError error
                     else
                         $fileModal.modal 'hide'
-                        getAndShowFolder()
+                        panelController.getAndShowFolder()
 
         $('#revert').on 'click', (event) ->
             $active = $fileModal.find('tr.info')
@@ -643,37 +757,6 @@ class PhotoViewerModalController
                     if result.data.length > 0
                         @$photoServices.prev().css 'display', 'block'
                         @$photoServices.append "<img src=\"#{e.images.thumbnail.url}\">" for e in result.data[0...MAX_NUM_SEARCH_PHOTOS]
-        
-    
-getAndShowFolder = (path) ->
-    ### gets and shows folder content. ###
-    path ?= config.get 'currentFolder'
-    spinner.spin document.body
-    mainViewController.disableClick()
-    dropbox.readdir path, null, (error, names, stat, stats) ->
-        spinner.stop()
-        if error
-            handleDropboxError error
-        else
-            config.set 'currentFolder', path
-            updateBreadcrumbs path
-            mainViewController.updateView stats, false
-
-updateBreadcrumbs = (path) ->
-    ### udpates breadcrumb of folder path. ###
-    $breadcrumbs.empty()
-    for e, i in ancestorFolders path
-        if i == 0
-            $breadcrumbs.append '<li><a href="#" data-path="/">Home</a></li>'
-        else
-            name = e.replace /^.*\//, ''
-            $breadcrumbs.append """
-                <li>
-                    <span class="divider">/</span>
-                    <a href="#" data-path="#{e}">#{name}</a>
-                </li>
-                """
-    $breadcrumbs.children('li:last-child').addClass 'active'
 
 initializeDropbox = ->
     ###
@@ -682,6 +765,8 @@ initializeDropbox = ->
     2. checks URL. if it includes not_approved=true, a user rejected authentication request. Does nothing.
     3. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
     ###
+    $signInout = $('#sign-inout')
+
     $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
     dropbox = new Dropbox.Client
         key: DROPBOX_API_KEY
@@ -700,100 +785,20 @@ initializeDropbox = ->
                 else
                     $signInout.button 'signout'
                     $('#header button:not(#sign-inout)').removeAttr 'disabled'
-                    getAndShowFolder()
+                    panelController.getAndShowFolder()
             break
     catch error
         console.log error
 
-initializeEventHandlers = ->
-    ### sets event handlers ###
-    # dropbox sign in button
-    $signInout.on 'click', ->
-        spinner.spin document.body
-        if $signInout.text() is 'sign-in'
-            $signInout.button 'loading'
-            dropbox.reset()
-            dropbox.authenticate (error, client) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                else
-                    $signInout.button 'signout'
-                    $('#header button:not(#sign-inout)').removeAttr 'disabled'
-        else
-            dropbox.signOut (error) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                else
-                    $signInout.button 'reset'
-                    $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
-
-    $breadcrumbs.on 'click', 'li:not(.active) > a', (event) ->
-        event.preventDefault()
-        $this = $(this)
-        $this.parent().nextUntil().remove() # removes descendent folders.
-        $this.parent().addClass 'active'
-        path = $this.data 'path'
-        getAndShowFolder path
-    
-    $('#menu-new-folder').on 'click', (event) ->
-        event.preventDefault()
-        name = prompt 'Folder Name'
-        return unless name and name isnt ''
-
-        spinner.spin document.body
-        dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
-            spinner.stop()
-            if error
-                handleDropboxError error
-            else
-                getAndShowFolder()
-
-    $('#menu-upload').on 'click', (event) ->
-        event.preventDefault()
-        $(this).parent().parent().pev().focus()
-        $('#file-picker').click()
-
-    $('#file-picker').on 'change', (event) ->
-        file = event.target.files[0]
-        spinner.spin document.body
-        dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
-            spinner.stop()
-            if error
-                handleDropboxError error
-            else
-                getAndShowFolder()
-
-    # search
-    xhr = null
-    searchString = null
-    $('#search').on 'keyup', ->
-        $this = $(this)
-        xhr.abort() if xhr?
-        xhr = null
-        if $this.val() is ''
-            getAndShowFolder()
-        else if $this.val() isnt searchString
-            spinner.spin document.body
-            searchString = $this.val()
-            xhr = dropbox.findByName '', $(this).val(), null, (error, stats) ->
-                xhr = null
-                if error
-                    handleDropboxError error
-                else
-                    mainViewController.updateView stats, true
-                spinner.stop()
 
 # main
 unless jasmine?
     new NoClickDelay document.body, ['BUTTON', 'A', 'INPUT', 'TH', 'TR']
     spinner = new Spinner()
+    panelController = new PanelController()
     mainViewController = new MainViewController()
     fileModalController = new FileModalController()
     viewerController = new ViewerController new PhotoViewerModalController()
-    $signInout = $('#sign-inout')
-    $breadcrumbs = $('#footer .breadcrumb')
     instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID
     config = PersistentObject.restore 'nimbus-config',
         currentFolder: '/'
@@ -801,4 +806,3 @@ unless jasmine?
             order: 'name'
             direction: 'ascending'
     initializeDropbox()
-    initializeEventHandlers()

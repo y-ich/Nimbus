@@ -1,5 +1,5 @@
 ###
-# Dropbox filer by web app
+Nimbus - Dropbox filer by web app
 (C) 2012-2013 ICHIKAWA, Yuji (New 3 Rs)
 ###
 
@@ -30,11 +30,9 @@ viewerController = null
 
 # general functions
 
+# returns 1, 0, -1 according to the order of str1 and str2.
+# It is for Array#sort method.
 compareString = (str1, str2) ->
-    ###
-    returns 1, 0, -1 according to the order of str1 and str2.
-    It is for Array#sort method.
-    ###
     if str1 > str2
         1
     else if str1 < str2
@@ -42,17 +40,13 @@ compareString = (str1, str2) ->
     else
         0
 
+# returns formated string of date.
+# example: Jan 18 2013 15:53:51 (JST)
 dateString = (date) ->
-    ###
-    returns formated string of date.
-    example: Jan 18 2013 15:53:51 (JST)
-    ###
     date.toString().replace /^.*? |GMT.* /g, ''
 
+# returns formated string of number as bytes.
 byteString = (n) ->
-    ###
-    returns formated string of number as bytes.
-    ###
     if n < 1000
         n.toString() + 'B'
     else if n < 1000000
@@ -62,35 +56,33 @@ byteString = (n) ->
     else if n < 1000000000000
         Math.round(n / 1000000000).toString() + 'GB'
 
+# returns extention in path.
 getExtension = (path) ->
-    ### returns extention in path. ###
     if /\./.test path then path.replace /^.*\./, '' else ''
 
+# judges whether JPEG or not by file name extension.
 isJpegFile = (name) ->
-    ### judges whether JPEG or not by file name extension. ###
     ['jpg', 'jpeg', 'jpe', 'jfif', 'jfi', 'jif'].indexOf(getExtension(name).toLowerCase()) >= 0
 
+# returns an array with ancestor folders of path.
+#    examples:
+#        '/' => ['']
+#        '/a/b/c' => ['', '/a', '/a/b', '/a/b/c']
 ancestorFolders = (path) ->
-    ###
-    returns an array with ancestor folders of path.
-    examples:
-        '/' => ['']
-        '/a/b/c' => ['', '/a', '/a/b', '/a/b/c']
-    ###
     if path is '/'
         [''] 
     else
         split = path.split '/'
         split[0..i].join '/' for e, i in split
 
+# returns query string of obj(hash).
 obj2query = (obj) ->
-    ### returns query string of obj(hash). ###
     (encodeURIComponent(key) + '=' + encodeURIComponent(value) for key, value of obj).join '&'
 
 # utility functions for Dropbox
 
+# notifies Dropbox error to user.
 handleDropboxError = (error, path = null) ->
-    ### notifies Dropbox error to user. ###
     console.log path if path?
     console.error error if (window.console)
     switch error.status
@@ -120,8 +112,8 @@ handleDropboxError = (error, path = null) ->
             else # abort etc.
                 console.log 'abort?'
 
+# returns a name of icon for 48px.
 typeIcon48 = (typeIcon) ->
-    ### returns a name of icon for 48px. ###
     switch typeIcon
         when 'page_white_excel' then 'excel48'
         when 'page_white_film' then 'page_white_dvd'
@@ -131,8 +123,8 @@ typeIcon48 = (typeIcon) ->
         when 'page_white_compressed' then 'page_white_zip48'
         else typeIcon + '48'
 
+# returns thumbnail URL or 48x48 icon URL if no thumbnail.
 thumbnailUrl = (stat, size = 'small') ->
-    ### returns thumbnail URL or 48x48 icon URL if no thumbnail. ###
     if stat.hasThumbnail
         dropbox.thumbnailUrl stat.path,
             png: not isJpegFile stat.name
@@ -140,8 +132,8 @@ thumbnailUrl = (stat, size = 'small') ->
     else
         "images/dropbox-api-icons/48x48/#{typeIcon48 stat.typeIcon}.gif"
 
+# returns compare function for stats by order and direction.
 compareStatBy = (order, direction) ->
-    ### returns compare function for stats by order and direction ###
     sign = if direction is 'ascending' then 1 else -1
     switch order
         when 'name'
@@ -155,18 +147,16 @@ compareStatBy = (order, direction) ->
         when 'place'
             (a, b) -> sign * compareString a.path.toLowerCase(), b.path.toLowerCase()
 
+# returns JavaScript Date understandable date string from EXIF DateTime format.
 exifDate2Date = (str) ->
-    ### returns JavaScript Date understandable date string from EXIF DateTime format. ###
     return null unless str?
     new Date Date.parse str.replace(/^(\d+):(\d+):(\d+)/, '$1/$2/$3') + ' UTC'
 
 # service interfaces
 
+# searches Flickr.
+# http://www.flickr.com/services/api/flickr.photos.search.html
 flickrSearch = (param, callback) ->
-    ###
-    searches Flickr.
-    http://www.flickr.com/services/api/flickr.photos.search.html
-    ###
     defaultQuery =
         api_key: FLICKR_API_KEY
         method: 'flickr.photos.search'
@@ -175,6 +165,8 @@ flickrSearch = (param, callback) ->
     param[key] ?= value for key, value of defaultQuery
     $.getJSON "http://www.flickr.com/services/rest/?#{obj2query param}&jsoncallback=?", null, callback
 
+# searches Panoramio.
+# http://www.panoramio.com/api/data/api.html
 panoramioSearch = (param, callback) ->
     defaultQuery =
         set: 'full'
@@ -187,11 +179,9 @@ panoramioSearch = (param, callback) ->
 
 # Controllers
 
+# is a controller for top-level UI
+# It is responsible for responses of sign-in/out button, breadcrumbs for folder path, new folder menu, upload menu, and search.
 class PanelController
-    ###
-    Controller for top-level UI
-    It is responsible for sign-in/out button, breadcrumbs for folder path, new folder menu, upload menu, and search.
-    ###
     constructor: ->
         _self = this
         @$breadcrumbs = $('#footer .breadcrumb')
@@ -278,8 +268,8 @@ class PanelController
                     spinner.stop()
                     xhr = null
 
+    # gets and shows folder content. path is a folder path. If it is not given, current folder is shown.
     getAndShowFolder: (path) =>
-        ### gets and shows folder content. path is a folder path. If it is not given, current folder will be shown. ###
         path ?= config.get 'currentFolder'
         spinner.spin document.body
         mainViewController.disableClick()
@@ -292,8 +282,8 @@ class PanelController
                 @_updateBreadcrumbs path
                 mainViewController.updateView stats, false
 
+    # udpates breadcrumb of folder path.
     _updateBreadcrumbs: (path) ->
-        ### udpates breadcrumb of folder path. ###
         @$breadcrumbs.empty()
         for e, i in ancestorFolders path
             if i == 0
@@ -309,14 +299,8 @@ class PanelController
         @$breadcrumbs.children('li:last-child').addClass 'active'
 
 
+# is responsible for view of file list, list operations, and a button for switching view.
 class MainViewController
-    ###
-    is responsible for view of file list, list operations, and a button for switching view.
-    public methods are,
-        updateView(stats) - update view according to stats
-        enableClick - enable rows and anchors to click
-        disableClick - disable rows and anchors to click
-    ###
     constructor: ->
         _self = this
         @stats = null
@@ -326,8 +310,9 @@ class MainViewController
         @$thead = @$fileList.children 'thead'
         # don't use variable of $('#coverflow'). $('#coverflow') is not static due to coverflow.js.
 
+        # event handlers for file list.
+        # To use context 'this' and instance, defines them.
         @_onClickFileRow = (event) ->
-            ### event handler for file list. ###
             $this =$(this)
             stat = $this.data 'dropbox-stat'
             if not stat?
@@ -347,6 +332,7 @@ class MainViewController
             panelController.getAndShowFolder path
             event.preventDefault()
         
+        # initialize view.
         if @_viewMode() is 'list'
             @$fileList.parent().css 'display', 'block'
             $('#coverflow').css 'display', 'none'
@@ -354,8 +340,10 @@ class MainViewController
             @$fileList.parent().css 'display', 'none'
             $('#coverflow').css 'display', 'block'
                 
+        # view mode button
         $('#radio-view > button').on 'click', -> _self._switchView $(this).val()
 
+        # sort by item row.
         @$thead.children().on 'click', 'th:not(:first)', ->
             $this = $(this)
             orderAndDirection = 
@@ -364,6 +352,7 @@ class MainViewController
             config.set 'fileList', orderAndDirection
             _self._sortFileList orderAndDirection.order, orderAndDirection.direction    
 
+        # share button.
         $popovered = null
         $('#share').on 'click', (event) ->
             $popovered = _self.$tbody.children 'tr.info'
@@ -397,6 +386,7 @@ class MainViewController
                 $popovered = null
                 event.preventDefault()
 
+    # updates folder view.
     updateView: (@stats, search = false) ->
         if @_viewMode() is 'coverflow'
             @_drawCoverFlow()
@@ -405,22 +395,28 @@ class MainViewController
             @_drawFileList config.get('fileList').order, config.get('fileList').direction, search
             @_clearCoverFlow()
 
+    # enables to click each item in list.
     enableClick: ->
         @$tbody.on 'click', 'tr', @_onClickFileRow
         @$tbody.on 'click', 'a', @_onClickFileAnchor
         
+    # disables to click each item in list.
     disableClick: ->
         @$tbody.off 'click', 'tr', @_onClickFileRow
         @$tbody.off 'click', 'a', @_onClickFileAnchor
 
+    # returns current view mode.
     _viewMode: -> $('#radio-view > button.active').val()
         
+    # clears file list.
     _clearFileList: -> @$tbody.empty()
         
+    # clears coverflow.
     _clearCoverFlow: ->
         @coverflow?.remove()
         @coverflow = null
 
+    # switch view.
     _switchView: (view) ->
         return unless @stats?
         if view is 'coverflow'
@@ -432,15 +428,15 @@ class MainViewController
             @$fileList.parent().css 'display', 'block'
             $('#coverflow').css 'display', 'none'
 
+    # whether file list updated for given stats or not.
     _isFileListUpdated: -> @$tbody.children().length > 0
 
+    # whether coverflow updated for given stats or not.
     _isCoverFlowUpdated: -> @coverflow?
-
+    
+    # prepares file list.
+    # If search is false, each stat in stats should be in same folder.
     _drawFileList: (order, direction, search = false) ->
-        ###
-        prepares file list.
-        if search is false, each stat in stats should be in same folder.    
-        ###
         tdGenerators = [
             ['image', (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"]
             ['name', (stat) -> "<td>#{stat.name}</td>"]
@@ -469,6 +465,7 @@ class MainViewController
         @$tbody.append trs
         @enableClick()
 
+    # sorts existent file list.
     _sortFileList: (order, direction) ->
         ### sorts file list. ###
         @_updateHeader order, direction
@@ -477,12 +474,13 @@ class MainViewController
         $trs.sort (a, b) -> compareStatBy(order, direction) $(a).data('dropbox-stat'), $(b).data('dropbox-stat')
         @$tbody.append $trs
 
+    # updates header part of file list.
     _updateHeader: (order, direction) ->
         @$thead.find("th.#{className}").removeClass className for className in ['ascending', 'descending']
         @$thead.find('th > span').filter(-> $(this).text() is order).parent().addClass direction
 
+    # prepares cover flow.
     _drawCoverFlow: ->
-        ### prepares cover flow. ###
         size = 'l'
         width = 320
         stats = @stats
@@ -524,12 +522,8 @@ class MainViewController
                 else if stat.isFolder
                     panelController.getAndShowFolder stat.path
 
+# is resonsible for information modal window for each file.
 class FileModalController
-    ###
-    is resonsible for information modal window for each file.
-    public method is
-        open(stat) - opens information modal window for stat.
-    ###
     constructor: ->
         @$fileModal = $('#file-modal')
         $fileModal = @$fileModal
@@ -577,10 +571,11 @@ class FileModalController
         $fileModal.on 'hidden', (event) ->
             mainViewController.enableClick()
 
+    # open information modal for stat (stat is instance of Stat in dropbox.js)
     open: (stat) ->
         $fileModal = @$fileModal
         $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
-        $fileModal.find('.modal-body > table').remove()
+        $fileModal.find('table').remove()
         $('#open').attr 'disabled', 'disabled'
         spinner.spin document.body
         dropbox.history stat.path, null, (error, stats) ->
@@ -598,6 +593,7 @@ class FileModalController
                 directUrl = url.url
                 $('#open').removeAttr 'disabled'
 
+    # make content of modal window. revision information.
     @_makeHistoryList: (stats) ->
         ### prepares file history list. ###
         ITEMS = [
@@ -622,6 +618,7 @@ class FileModalController
         $('#file-modal .modal-body').append $table
         $('#restore').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
 
+# is file viewer controller.
 class ViewerController
     constructor: (@modalController) ->
         @$viewer = $('#viewer')
@@ -632,11 +629,9 @@ class ViewerController
         $('#viewer > .close').on 'click', (event) ->
             $(this).parent().fadeOut()
 
+    # For pictures, it shows preview and prepares information modal window.
+    # For others, suggests to open new browser tab or window to show.
     preview: (stat, link) ->
-        ###
-        For pictures, it shows preview and prepares information modal window.
-        For others, suggests to open new browser tab or window to show.
-        ### 
         @$viewer.css 'background-image', ''
         $('#button-info').attr 'disabled', 'disabled'
     
@@ -670,12 +665,8 @@ class ViewerController
                     bootbox.confirm 'Do you want to open in new tab?', (result) ->
                         window.open url.url if result
                 
+# is resposible for information modal window in photo viewer.
 class PhotoViewerModalController
-    ###
-    is resposible for viewer modal window for photos.
-    public method is,
-        prepareViewerModal(stat, metaGroups)
-    ###
     constructor: ->
         @$viewerModal = $('#viewer-modal')
         @$photoServices = $('#photo-services')
@@ -686,6 +677,9 @@ class PhotoViewerModalController
                 google.maps.event.trigger @maps, 'resize' 
                 @maps.setCenter @center
         
+    # prepare the modal.
+    # stat is a file information by Dropbox.
+    # metaGroups is JPEG meta data object by JpegMeta.
     prepareViewerModal: (stat, metaGroups) ->
         @$photoServices.empty()
         @$photoServices.prev().css 'display', 'none'
@@ -713,8 +707,10 @@ class PhotoViewerModalController
                 @$metadata.append "<dt>#{v.description}</dt>"
                 @$metadata.append "<dd>#{v.value}</dd>"
 
+    # shows the modal
     show: -> @$viewerModal.modal 'show'
 
+    # searches public photos by location and puts into the modal.
     _searchPhotos: (lat, lng) -> # limiting by date if currently disabled.
         flickrSearch
                 ###
@@ -761,30 +757,35 @@ class PhotoViewerModalController
 
 # utility classes for app
 
+# is a class for localStorage.
+# An object is stored into localStorage with specified key.
 class PersistentObject
+    # restores an object by key.
+    # defaultValue compensates restored object.
     @restore: (key, defaultValue = {}) ->
         restored = JSON.parse localStorage[key] ? '{}'
         for k, v of defaultValue
             restored[k] ?= v
         new PersistentObject key, restored
 
+    # stores @object with @key into localStorage.
     constructor: (@key, @object) ->
         localStorage[@key] = JSON.stringify @object
 
-    get: (key) -> @object[key]
+    # reads a value of property in @object.
+    get: (property) -> @object[property]
 
-    set: (key, value) ->
-        @object[key] = value
+    # set a value of property.
+    set: (property, value) ->
+        @object[property] = value
         localStorage[@key] = JSON.stringify @object
 
+# 1. checks forwarded result.
+# 2. disables Dropbox related buttons.
+# 3. prepares Dropbox Client instance.
+# 4. if not approved, a user rejected authentication request. Does nothing.
+# 5. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
 initializeDropbox = ->
-    ###
-    1. check forwarded result.
-    2. disable Dropbox related buttons.
-    3. prepares Dropbox Client instance.
-    4. if not approved, a user rejected authentication request. Does nothing.
-    5. checks localStorage. if it includes data for this APP_KEY, tries to sign in. 
-    ###
     notApproved = /not_approved=true/.test location.toString()
     $signInout = $('#sign-inout')
 
@@ -813,7 +814,8 @@ initializeDropbox = ->
     catch error
         console.log error
 
-    window.history.replaceState null, null, location.pathname # clear forwarded query parameter
+    # clear forwarded query parameter
+    window.history.replaceState null, null, location.pathname
 
 
 # main

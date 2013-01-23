@@ -550,7 +550,7 @@ class FileModalController
                         $fileModal.modal 'hide'
                         panelController.getAndShowFolder()
 
-        $('#revert').on 'click', (event) ->
+        $('#restore').on 'click', (event) ->
             $active = $fileModal.find('tr.info')
             if $active.length == 0
                 alert 'select a previous version'
@@ -572,7 +572,7 @@ class FileModalController
             $this =$(this)
             $fileModal.find('tr').removeClass 'info'
             $this.addClass 'info'
-            $('#revert').removeAttr 'disabled'
+            $('#restore').removeAttr 'disabled'
 
         $fileModal.on 'hidden', (event) ->
             mainViewController.enableClick()
@@ -580,7 +580,7 @@ class FileModalController
     open: (stat) ->
         $fileModal = @$fileModal
         $fileModal.find('h3').html "<img src=\"#{thumbnailUrl stat}\">#{stat.name}"
-        $fileModal.find('.modal-body').empty()
+        $fileModal.find('.modal-body > table').remove()
         $('#open').attr 'disabled', 'disabled'
         spinner.spin document.body
         dropbox.history stat.path, null, (error, stats) ->
@@ -620,7 +620,7 @@ class FileModalController
         $table.append $tbody
     
         $('#file-modal .modal-body').append $table
-        $('#revert').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
+        $('#restore').attr 'disabled', 'disabled' # revert button is disabled until any tr selected.
 
 class ViewerController
     constructor: (@modalController) ->

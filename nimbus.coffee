@@ -32,8 +32,6 @@ fileModalController = null
 # view
 $signInout = null
 $breadcrumbs = null
-$viewer = null
-$popoverParent = null
 
 # general functions
 
@@ -266,6 +264,33 @@ class MainViewController
                 direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
             config.set 'fileList', orderAndDirection
             _self._sortFileList orderAndDirection.order, orderAndDirection.direction    
+
+        $selected = null
+        $('#share').on 'click', (event) ->
+            $selected = _self.$tbody.children 'tr.info'
+            return if $selected.length == 0
+            stat = $selected.data 'dropbox-stat'
+            spinner.spin document.body
+            dropbox.makeUrl stat.path, null, (error, url) ->
+                spinner.stop()
+                if error
+                    handleDropboxError error
+                    alert 'Link for sharing it is not available.' if error.status = 403
+                else
+                    $selected.popover
+                        placement: 'bottom'
+                        trigger: 'manual'
+                        title: '' # no title for copy & paste
+                        content: url.url
+                    $selected.popover 'show'
+        # cancel popover for sharing
+        $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
+            if $selected? and not $(event.target).hasClass 'popover-content'
+                $selected.popover 'destroy'
+                $selected = null
+                # no action except for canceling. not perfect. your must prevent actions of other touch/mouce events.
+                event.stopPropagation()
+                event.preventDefault()
 
     updateView: (@stats, search = false) ->
         if @_viewMode() is 'coverflow'
@@ -583,7 +608,11 @@ class PhotoViewerModalController
         
     
 preview = (stat, link) ->
-    ### prepares contents of $('#viewer') and $('#viewerModal') and show $('#viewer'). ### 
+    ###
+    For pictures, it shows preview and prepares information modal window.
+    For others, suggests to open new browser tab or window to show.
+    ### 
+    $viewer = $('#viewer')
     $viewer.css 'background-image', ''
     $('#button-info').attr 'disabled', 'disabled'
     
@@ -728,37 +757,12 @@ initializeEventHandlers = ->
             else
                 getAndShowFolder()
 
-    $('#share').on 'click', (event) ->
-        $popoverParent = $('#file-list > tbody > tr.info')
-        return if $popoverParent.length == 0
-        stat = $popoverParent.data 'dropbox-stat'
-        spinner.spin document.body
-        dropbox.makeUrl stat.path, null, (error, url) ->
-            spinner.stop()
-            if error
-                handleDropboxError error
-                alert 'Link for sharing it is not available.' if error.status = 403
-            else
-                $popoverParent.popover
-                    placement: 'bottom'
-                    trigger: 'manual'
-                    title: ''
-                    content: url.url
-                $popoverParent.popover 'show'
-
-    # cancel popover for sharing
-    $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
-        if $popoverParent? and not $(event.target).hasClass 'popover-content'
-            $popoverParent.popover 'destroy'
-            $popoverParent = null
-            event.preventDefault()
-
     $('#button-info').on 'click', (event) ->
         event.stopPropagation() # prevent to click $viewer.
         viewerModalController.show()
 
-    $viewer.on 'click', (event) ->
-        $viewer.fadeOut()
+    $('#viewer > .close').on 'click', (event) ->
+        $(this).parent().fadeOut()
 
     # search
     xhr = null
@@ -789,7 +793,6 @@ unless jasmine?
     viewerModalController = new PhotoViewerModalController()
     $signInout = $('#sign-inout')
     $breadcrumbs = $('#footer .breadcrumb')
-    $viewer = $('#viewer')
     instajam = new Instajam client_id: INSTAGRAM_CLIENT_ID
     config = PersistentObject.restore 'nimbus-config',
         currentFolder: '/'

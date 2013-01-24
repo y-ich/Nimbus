@@ -245,26 +245,26 @@ class PanelController
                         $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
 
     _initializeBreadcrumbs: ->
-        @$breadcrumbs.on 'click', 'li:not(.active) > a', ->
-            $this = $(this)
-            $this.parent().nextUntil().remove() # removes descendent folders.
-            $this.parent().addClass 'active'
-            path = $this.data 'path'
-            _self.getAndShowFolder path
+        @$breadcrumbs.on 'click', 'li:not(.active) > a', (event) =>
+            $target = $(event.currentTarget)
+            $target.parent().nextUntil().remove() # removes descendent folders.
+            $target.parent().addClass 'active'
+            path = $target.data 'path'
+            @getAndShowFolder path
             false
 
     _initializeNewFolderMenu: ->
-        $('#menu-new-folder').on 'click', ->
+        $('#menu-new-folder').on 'click', =>
             name = prompt 'Folder Name'
             return false unless name and name isnt ''
 
             spinner.spin document.body
-            dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
+            dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) =>
                 spinner.stop()
                 if error
                     handleDropboxError error
                 else
-                    _self.getAndShowFolder()
+                    @getAndShowFolder()
             false
 
     _initialzeUploadMenu: ->
@@ -274,30 +274,30 @@ class PanelController
             $filePicker.click()
             false
 
-        $filePicker.on 'change', (event) ->
+        $filePicker.on 'change', (event) =>
             spinner.spin document.body
             for file in @files
-                dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
+                dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) =>
                     spinner.stop()
                     if error
                         handleDropboxError error
                     else
-                        _self.getAndShowFolder()
+                        @getAndShowFolder()
 
     _initializeSearch: ->
         xhr = null
         searchString = null
-        $('#search').on 'keyup', ->
+        $('#search').on 'keyup', (event) =>
             # NOTE: $this.val() is not the value when keyup. if quick sequential type, $this.val() will update after correspondent keyup.
-            $this = $(this)
-            return if $this.val() is searchString # no change, keep going.
+            $target = $(event.currentTarget)
+            return if $target.val() is searchString # no change, keep going.
             xhr.abort() if xhr?
             xhr = null
-            if $this.val() is ''
-                _self.getAndShowFolder() # if search field is empty, then show current folder.
+            if $target.val() is ''
+                @getAndShowFolder() # if search field is empty, then show current folder.
             else
                 spinner.spin document.body
-                searchString = $this.val()
+                searchString = $target.val()
                 xhr = dropbox.findByName '', searchString, null, (error, stats) ->
                     if error
                         handleDropboxError error

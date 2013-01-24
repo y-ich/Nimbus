@@ -186,89 +186,11 @@ class PanelController
         _self = this
         @$breadcrumbs = $('#footer .breadcrumb')
 
-        $signInout = $('#sign-inout')
-        $signInout.on 'click', ->
-            spinner.spin document.body
-            if $signInout.text() is 'sign-in'
-                $signInout.button 'loading'
-                dropbox.reset()
-                dropbox.authenticate (error, client) ->
-                    spinner.stop()
-                    if error
-                        handleDropboxError error
-                    else
-                        $signInout.button 'signout'
-                        $('#header button:not(#sign-inout)').removeAttr 'disabled'
-            else
-                dropbox.signOut (error) ->
-                    spinner.stop()
-                    if error
-                        handleDropboxError error
-                    else
-                        $signInout.button 'reset'
-                        $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
-
-        @$breadcrumbs.on 'click', 'li:not(.active) > a', ->
-            $this = $(this)
-            $this.parent().nextUntil().remove() # removes descendent folders.
-            $this.parent().addClass 'active'
-            path = $this.data 'path'
-            _self.getAndShowFolder path
-            false
-
-        $('#menu-new-folder').on 'click', ->
-            name = prompt 'Folder Name'
-            return false unless name and name isnt ''
-
-            spinner.spin document.body
-            dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
-                spinner.stop()
-                if error
-                    handleDropboxError error
-                else
-                    _self.getAndShowFolder()
-            false
-
-        # upload
-
-        $filePicker = $('#file-picker')
-        $('#menu-upload').on 'click', ->
-            $(this).parent().parent().prev().focus() # focus to the button.
-            $filePicker.click()
-            false
-
-        $filePicker.on 'change', (event) ->
-            spinner.spin document.body
-            for file in @files
-                dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
-                    spinner.stop()
-                    if error
-                        handleDropboxError error
-                    else
-                        _self.getAndShowFolder()
-
-        # search
-
-        xhr = null
-        searchString = null
-        $('#search').on 'keyup', ->
-            # NOTE: $this.val() is not the value when keyup. if quick sequential type, $this.val() will update after correspondent keyup.
-            $this = $(this)
-            return if $this.val() is searchString
-            xhr.abort() if xhr?
-            xhr = null
-            if $this.val() is ''
-                _self.getAndShowFolder() # if search field is empty, then show current folder.
-            else
-                spinner.spin document.body
-                searchString = $this.val()
-                xhr = dropbox.findByName '', searchString, null, (error, stats) ->
-                    if error
-                        handleDropboxError error
-                    else
-                        mainViewController.updateView stats, true
-                    spinner.stop()
-                    xhr = null
+        @_initializeSignInoutButton()
+        @_initializeBreadcrumbs()
+        @_initializeNewFolderMenu()
+        @_initialzeUploadMenu()
+        @_initializeSearch()
 
     # gets and shows folder content. path is a folder path. If it is not given, current folder is shown.
     getAndShowFolder: (path) =>
@@ -300,6 +222,90 @@ class PanelController
                     """
         @$breadcrumbs.children('li:last-child').addClass 'active'
 
+    _initializeSignInoutButton: ->
+        $signInout = $('#sign-inout')
+        $signInout.on 'click', ->
+            spinner.spin document.body
+            if $signInout.text() is 'sign-in'
+                $signInout.button 'loading'
+                dropbox.reset()
+                dropbox.authenticate (error, client) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        $signInout.button 'signout'
+                        $('#header button:not(#sign-inout)').removeAttr 'disabled'
+            else
+                dropbox.signOut (error) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        $signInout.button 'reset'
+                        $('#header button:not(#sign-inout)').attr 'disabled', 'disabled'
+
+    _initializeBreadcrumbs: ->
+        @$breadcrumbs.on 'click', 'li:not(.active) > a', ->
+            $this = $(this)
+            $this.parent().nextUntil().remove() # removes descendent folders.
+            $this.parent().addClass 'active'
+            path = $this.data 'path'
+            _self.getAndShowFolder path
+            false
+
+    _initializeNewFolderMenu: ->
+        $('#menu-new-folder').on 'click', ->
+            name = prompt 'Folder Name'
+            return false unless name and name isnt ''
+
+            spinner.spin document.body
+            dropbox.mkdir config.get('currentFolder') + '/' + name, (error, stat) ->
+                spinner.stop()
+                if error
+                    handleDropboxError error
+                else
+                    _self.getAndShowFolder()
+            false
+
+    _initialzeUploadMenu: ->
+        $filePicker = $('#file-picker')
+        $('#menu-upload').on 'click', ->
+            $(this).parent().parent().prev().focus() # focus to the button.
+            $filePicker.click()
+            false
+
+        $filePicker.on 'change', (event) ->
+            spinner.spin document.body
+            for file in @files
+                dropbox.writeFile config.get('currentFolder') + '/' + file.name, file, null, (error, stat) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                    else
+                        _self.getAndShowFolder()
+
+    _initializeSearch: ->
+        xhr = null
+        searchString = null
+        $('#search').on 'keyup', ->
+            # NOTE: $this.val() is not the value when keyup. if quick sequential type, $this.val() will update after correspondent keyup.
+            $this = $(this)
+            return if $this.val() is searchString # no change, keep going.
+            xhr.abort() if xhr?
+            xhr = null
+            if $this.val() is ''
+                _self.getAndShowFolder() # if search field is empty, then show current folder.
+            else
+                spinner.spin document.body
+                searchString = $this.val()
+                xhr = dropbox.findByName '', searchString, null, (error, stats) ->
+                    if error
+                        handleDropboxError error
+                    else
+                        mainViewController.updateView stats, true
+                    spinner.stop()
+                    xhr = null
 
 # is responsible for view of file list, list operations, and a button for switching view.
 class MainViewController
@@ -312,28 +318,6 @@ class MainViewController
         @$thead = @$fileList.children 'thead'
         # don't use variable of $('#coverflow'). $('#coverflow') is not static due to coverflow.js.
 
-        # event handlers for file list.
-        # To use context 'this' and instance, defines them.
-        @_onClickFileRow = (event) ->
-            $this =$(this)
-            stat = $this.data 'dropbox-stat'
-            if not stat?
-                return
-            if stat.isFile
-                if $this.hasClass 'info'
-                    _self.disableClick() # prevents malfunction due to double click
-                    fileModalController.open stat
-                else
-                    _self.$tbody.children().removeClass 'info'
-                    $this.addClass 'info'
-            else if stat.isFolder
-                panelController.getAndShowFolder stat.path
-
-        @_onClickFileAnchor = (event) ->
-            path = $(this).text()
-            panelController.getAndShowFolder path
-            event.preventDefault()
-        
         # initialize view.
         if @_viewMode() is 'list'
             @$fileList.parent().css 'display', 'block'
@@ -438,15 +422,16 @@ class MainViewController
             ['name', (stat) -> "<td>#{stat.name}</td>"]
             ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
         ]
-        tdGenerators = tdGenerators.concat if search
-                [['place', (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"]]
-            else
-                [
-                    ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"]
-                    ['kind', (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"]
-                ]
+        if search
+            tdGenerators.splice 2, 0, ['place', (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"]
+            console.log tdGenerators
+        else
+            tdGenerators.splice 3, 0,
+                ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"],
+                ['kind', (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"]
         thGenerator = (key) -> "<th#{(if order is key then ' class=' + direction else '') +
             (if key is 'size' then ' style=\"text-align: right;\"' else '')}><span>#{key}</span></th>"
+
         @$thead.children().html tdGenerators.map((e) -> thGenerator e[0]).join ''
             
         stats = @stats.sort compareStatBy order, direction
@@ -517,6 +502,29 @@ class MainViewController
                     viewerController.preview stat, link
                 else if stat.isFolder
                     panelController.getAndShowFolder stat.path
+
+    _onClickFileRow: (event) =>
+        # NOTE: when using fat arror, use event.currentTarget instead of this.
+        $target =$(event.currentTarget)
+        stat = $target.data 'dropbox-stat'
+        if not stat?
+            return
+        if stat.isFile
+            if $target.hasClass 'info'
+                @disableClick() # prevents malfunction due to double click
+                fileModalController.open stat
+            else
+                @$tbody.children().removeClass 'info'
+                $target.addClass 'info'
+        else if stat.isFolder
+            panelController.getAndShowFolder stat.path
+
+    _onClickFileAnchor: (event) ->
+        path = $(this).text()
+        panelController.getAndShowFolder path
+        event.stopPropagation() # prevent clicking Row.
+        false # prevent Anchor default action.
+        
 
 # is resonsible for information modal window for each file.
 class FileModalController

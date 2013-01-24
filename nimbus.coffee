@@ -183,7 +183,6 @@ panoramioSearch = (param, callback) ->
 # It is responsible for responses of sign-in/out button, breadcrumbs for folder path, new folder menu, upload menu, and search.
 class PanelController
     constructor: ->
-        _self = this
         @$breadcrumbs = $('#footer .breadcrumb')
 
         @_initializeSignInoutButton()

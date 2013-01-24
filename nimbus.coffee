@@ -309,7 +309,6 @@ class PanelController
 # is responsible for view of file list, list operations, and a button for switching view.
 class MainViewController
     constructor: ->
-        _self = this
         @stats = null
         @coverflow = null
         @$fileList = $('#file-list')
@@ -317,64 +316,14 @@ class MainViewController
         @$thead = @$fileList.children 'thead'
         # don't use variable of $('#coverflow'). $('#coverflow') is not static due to coverflow.js.
 
-        # initialize view.
-        if @_viewMode() is 'list'
-            @$fileList.parent().css 'display', 'block'
-            $('#coverflow').css 'display', 'none'
-        else
-            @$fileList.parent().css 'display', 'none'
-            $('#coverflow').css 'display', 'block'
-                
-        # view mode button
-        $('#radio-view > button').on 'click', -> _self._switchView $(this).val()
-
-        # sort by item row.
-        @$thead.children().on 'click', 'th:not(:first)', ->
-            $this = $(this)
-            orderAndDirection = 
-                order: $this.children('span').text()
-                direction: if $this.hasClass 'ascending' then 'descending' else 'ascending'
-            config.set 'fileList', orderAndDirection
-            _self._sortFileList orderAndDirection.order, orderAndDirection.direction    
-
-        # share button.
-        $popovered = null
-        $('#share').on 'click', (event) ->
-            $popovered = _self.$tbody.children 'tr.info'
-            if $popovered.length == 0
-                $popovered = $(this)
-                $popovered.popover
-                    placement: 'bottom'
-                    trigger: 'manual'
-                    title: 'How to share' # no title for copy & paste
-                    content: 'Select a file and touch this button!'
-                $popovered.popover 'show'                
-            else
-                stat = $popovered.data 'dropbox-stat'
-                spinner.spin document.body
-                dropbox.makeUrl stat.path, null, (error, url) ->
-                    spinner.stop()
-                    if error
-                        handleDropboxError error
-                        alert 'Link for sharing it is not available.' if error.status = 403
-                    else
-                        $popovered.popover
-                            placement: 'bottom'
-                            trigger: 'manual'
-                            title: '' # no title for copy & paste
-                            content: url.url
-                        $popovered.popover 'show'
-        # cancel popover for sharing
-        $(document).on (if window.Touch? then 'touchstart' else 'mousedown'), (event) ->
-            if $popovered? and not $(event.target).hasClass 'popover-content'
-                $popovered.popover 'destroy'
-                $popovered = null
-                event.preventDefault()
+        @_initializeModeRadio()
+        @_initializeSortableHeader()
+        @_initializeShare()
 
     # updates folder view.
     updateView: (@stats, @search = false) ->
         @_clearViews()
-        @_switchView @_viewMode()
+        @_showView @_viewMode()
 
     # enables to click each item in list.
     enableClick: ->
@@ -395,8 +344,8 @@ class MainViewController
         @coverflow?.remove()
         @coverflow = null
 
-    # switch view.
-    _switchView: (view) ->
+    # shows view.
+    _showView: (view) ->
         return unless @stats?
         if view is 'coverflow'
             @$fileList.parent().css 'display', 'none'
@@ -501,6 +450,54 @@ class MainViewController
                     viewerController.preview stat, link
                 else if stat.isFolder
                     panelController.getAndShowFolder stat.path
+
+    _initializeModeRadio: ->
+        $('#radio-view > button').on 'click', (event) => @_showView $(event.currentTarget).val()
+
+    _initializeSortableHeader: ->
+        @$thead.children().on 'click', 'th:not(:first)', (event) =>
+            $target = $(event.currentTarget)
+            orderAndDirection = 
+                order: $target.children('span').text()
+                direction: if $target.hasClass 'ascending' then 'descending' else 'ascending'
+            config.set 'fileList', orderAndDirection
+            @_sortFileList orderAndDirection.order, orderAndDirection.direction    
+
+    # initializes share button and canceling popover by clicking any other places.
+    _initializeShare: ->
+        $popovered = null
+        $('#share').on 'click', (event) =>
+            $popovered = @$tbody.children 'tr.info'
+            if $popovered.length == 0
+                $popovered = $(event.currentTarget)
+                $popovered.popover
+                    placement: 'bottom'
+                    trigger: 'manual'
+                    title: 'How to share' # no title for copy & paste
+                    content: 'Select a file and touch this button!'
+                $popovered.popover 'show'                
+            else
+                stat = $popovered.data 'dropbox-stat'
+                spinner.spin document.body
+                dropbox.makeUrl stat.path, null, (error, url) ->
+                    spinner.stop()
+                    if error
+                        handleDropboxError error
+                        alert 'Link for sharing it is not available.' if error.status = 403
+                    else
+                        $popovered.popover
+                            placement: 'bottom'
+                            trigger: 'manual'
+                            title: '' # no title for copy & paste
+                            content: url.url
+                        $popovered.popover 'show'
+        # cancel popover for sharing by clicking any place except popover content.
+        document.addEventListener 'click', ((event) ->
+                if $popovered? and not $(event.target).hasClass 'popover-content'
+                    $popovered.popover 'destroy'
+                    $popovered = null
+                    event.stopPropagation()
+            ), true
 
     _onClickFileRow: (event) =>
         # NOTE: when using fat arror, use event.currentTarget instead of this.

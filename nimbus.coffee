@@ -252,12 +252,14 @@ class PanelController
         xhr = null
         searchString = null
         $('#search').on 'keyup', ->
+            # NOTE: $this.val() is not the value when keyup. if quick sequential type, $this.val() will update after correspondent keyup.
             $this = $(this)
+            return if $this.val() is searchString
             xhr.abort() if xhr?
             xhr = null
             if $this.val() is ''
                 _self.getAndShowFolder() # if search field is empty, then show current folder.
-            else if $this.val() isnt searchString
+            else
                 spinner.spin document.body
                 searchString = $this.val()
                 xhr = dropbox.findByName '', searchString, null, (error, stats) ->
@@ -387,13 +389,9 @@ class MainViewController
                 event.preventDefault()
 
     # updates folder view.
-    updateView: (@stats, search = false) ->
-        if @_viewMode() is 'coverflow'
-            @_drawCoverFlow()
-            @_clearFileList()
-        else
-            @_drawFileList config.get('fileList').order, config.get('fileList').direction, search
-            @_clearCoverFlow()
+    updateView: (@stats, @search = false) ->
+        @_clearViews()
+        @_switchView @_viewMode()
 
     # enables to click each item in list.
     enableClick: ->
@@ -408,11 +406,9 @@ class MainViewController
     # returns current view mode.
     _viewMode: -> $('#radio-view > button.active').val()
         
-    # clears file list.
-    _clearFileList: -> @$tbody.empty()
-        
-    # clears coverflow.
-    _clearCoverFlow: ->
+    # clears views.
+    _clearViews: ->
+        @$tbody.empty()
         @coverflow?.remove()
         @coverflow = null
 
@@ -424,7 +420,7 @@ class MainViewController
             @_drawCoverFlow() unless @_isCoverFlowUpdated()
             $('#coverflow').css 'display', 'block'
         else
-            @_drawFileList config.get('fileList').order, config.get('fileList').direction unless @_isFileListUpdated()
+            @_drawFileList config.get('fileList').order, config.get('fileList').direction, @search unless @_isFileListUpdated()
             @$fileList.parent().css 'display', 'block'
             $('#coverflow').css 'display', 'none'
 

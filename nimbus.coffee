@@ -530,6 +530,14 @@ class MainViewController
         $target.html "<input type=\"text\" value=\"#{$target.text()}\" />"
         $input = $target.children()
         $input.css 'width', width
+        inputCancel = (event) =>
+            if event.target isnt $input[0]
+                $td = $input.parent()
+                $td.text $td.parent().data('dropbox-stat').name
+                @enableClick()                
+        # cancel if touching except input.
+        $(document).on 'click', inputCancel
+
         $input.on 'keypress', (event) => # uses keypress rather than change because enter without change does not trigger change.
             return if event.keyCode != 13
             $target = $(event.currentTarget)
@@ -550,12 +558,7 @@ class MainViewController
                 else
                     $target.parent().text stat.name
                     @enableClick()
-        # cancel if touching except input.
-        $(document).on 'click', (event) =>
-            if event.target isnt $input[0]
-                $td = $input.parent()
-                $td.text $td.parent().data('dropbox-stat').name
-                @enableClick()                
+                $(document).off 'click', inputCancel
         $input.focus()
         @disableClick()
         event.stopPropagation() # prevent clicking Row.

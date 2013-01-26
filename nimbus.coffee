@@ -526,12 +526,11 @@ class MainViewController
     # replace name to input
     _onClickFileName: (event) =>
         $target =$(event.currentTarget)
-        console.log $target.text()
         width = textWidth $target
         $target.html "<input type=\"text\" value=\"#{$target.text()}\" />"
         $input = $target.children()
         $input.css 'width', width
-        $input.on 'keypress', (event) =>
+        $input.on 'keypress', (event) => # uses keypress rather than change because enter without change does not trigger change.
             return if event.keyCode != 13
             $target = $(event.currentTarget)
             if $target.val() is ''
@@ -551,6 +550,12 @@ class MainViewController
                 else
                     $target.parent().text stat.name
                     @enableClick()
+        # cancel if touching except input.
+        $(document).on 'click', (event) =>
+            if event.target isnt $input[0]
+                $td = $input.parent()
+                $td.text $td.parent().data('dropbox-stat').name
+                @enableClick()                
         $input.focus()
         @disableClick()
         event.stopPropagation() # prevent clicking Row.

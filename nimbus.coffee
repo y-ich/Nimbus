@@ -85,6 +85,16 @@ obj2query = (obj) ->
 coverFlowCanvasPixels: (canvasWidth, imageRatio) ->
     Math.ceil canvasWidth * 2 * canvasWidth * imageRatio
 
+# returns text width in element.
+# WANRING: use just for element including text only.
+textWidth = ($element) ->
+    html_org = $element.html()
+    html_calc = '<span>' + html_org + '</span>'
+    $element.html(html_calc)
+    width = $element.find('span:first').width()
+    $element.html(html_org)
+    width
+
 # utility functions for Dropbox
 
 # notifies Dropbox error to user.
@@ -335,11 +345,13 @@ class MainViewController
     enableClick: ->
         @$tbody.on 'click', 'tr', @_onClickFileRow
         @$tbody.on 'click', 'a', @_onClickFileAnchor
-        
+        @$tbody.on 'click', 'td:nth-child(2)', @_onClickFileName
+
     # disables to click each item in list.
     disableClick: ->
         @$tbody.off 'click', 'tr', @_onClickFileRow
         @$tbody.off 'click', 'a', @_onClickFileAnchor
+        @$tbody.off 'click', 'td:nth-child(2)', @_onClickFileName
 
     # returns current view mode.
     _viewMode: -> $('#radio-view > button.active').val()
@@ -510,6 +522,38 @@ class MainViewController
                 $target.addClass 'info'
         else if stat.isFolder
             panelController.getAndShowFolder stat.path
+
+    # replace name to input
+    _onClickFileName: (event) =>
+        $target =$(event.currentTarget)
+        console.log $target.text()
+        width = textWidth $target
+        $target.html "<input type=\"text\" value=\"#{$target.text()}\" />"
+        $input = $target.children()
+        $input.css 'width', width
+        $input.on 'keypress', (event) =>
+            return if event.keyCode != 13
+            $target = $(event.currentTarget)
+            if $target.val() is ''
+                alert 'Enter a name'
+            else
+                stat = $target.parents('tr').data 'dropbox-stat'
+                if $target.val() isnt stat.name
+                    spinner.spin document.body
+                    dropbox.move stat.path, stat.path.replace(stat.name, $target.val()), (error, stat) =>
+                        spinner.stop()
+                        if error
+                            handleDropboxError error
+                        else
+                            $target.parents('tr').data 'dropbox-stat', stat
+                            $target.parent().text stat.name
+                        @enableClick()
+                else
+                    $target.parent().text stat.name
+                    @enableClick()
+        $input.focus()
+        @disableClick()
+        event.stopPropagation() # prevent clicking Row.
 
     _onClickFileAnchor: (event) ->
         path = $(this).text()

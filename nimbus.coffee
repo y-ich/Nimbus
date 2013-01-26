@@ -5,6 +5,9 @@ Nimbus - Dropbox filer by web app
 
 # global variables
 
+DROPBOX_API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
+FLICKR_API_KEY = 'deab42733a35afe10cee60d4daeed7c6'
+INSTAGRAM_CLIENT_ID = '04f30474ba9347eaae106a7c1c6f77dd'
 DROPBOX_THUMBNAIL_DIMENSIONS =
     xs: [32, 32]
     small: [32, 32]
@@ -14,9 +17,7 @@ DROPBOX_THUMBNAIL_DIMENSIONS =
     large: [128, 128]
     l: [640, 480]
     xl: [1024, 768]
-DROPBOX_API_KEY = 'YhIlKUggAFA=|prhxrh5PMBEqJAeN5Jjox+gc9NV/zlEy2UGJTcK+4A=='
-FLICKR_API_KEY = 'deab42733a35afe10cee60d4daeed7c6'
-INSTAGRAM_CLIENT_ID = '04f30474ba9347eaae106a7c1c6f77dd'
+CANVAS_MAX_PIXELS = 5000000
 MAX_NUM_SEARCH_PHOTOS = 10
 instajam = null
 dropbox = null
@@ -79,6 +80,11 @@ ancestorFolders = (path) ->
 obj2query = (obj) ->
     (encodeURIComponent(key) + '=' + encodeURIComponent(value) for key, value of obj).join '&'
 
+# returns number of pixels in each canvas using cover flow.
+# height of canvas is twice of scaled image.
+coverFlowCanvasPixels: (canvasWidth, imageRatio) ->
+    Math.ceil canvasWidth * 2 * canvasWidth * imageRatio
+
 # utility functions for Dropbox
 
 # notifies Dropbox error to user.
@@ -110,7 +116,7 @@ handleDropboxError = (error, path = null) ->
                 alert 'Sorry, there seems something wrong in Drobox server.'
                 console.error 'Server error'
             else # abort etc.
-                console.log 'abort?'
+                console.log 'maybe abort'
 
 # returns a name of icon for 48px.
 typeIcon48 = (typeIcon) ->
@@ -365,20 +371,8 @@ class MainViewController
     # prepares file list.
     # If search is false, each stat in stats should be in same folder.
     _drawFileList: (order, direction, search = false) ->
-        tdGenerators = [
-            ['image', (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"]
-            ['name', (stat) -> "<td>#{stat.name}</td>"]
-            ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
-        ]
-        if search
-            tdGenerators.splice 2, 0, ['place', (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"]
-            console.log tdGenerators
-        else
-            tdGenerators.splice 3, 0,
-                ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"],
-                ['kind', (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"]
-        thGenerator = (key) -> "<th#{(if order is key then ' class=' + direction else '') +
-            (if key is 'size' then ' style=\"text-align: right;\"' else '')}><span>#{key}</span></th>"
+        tdGenerators = @_tdGenerators search
+        thGenerator = @_thGenerator order, direction
 
         @$thead.children().html tdGenerators.map((e) -> thGenerator e[0]).join ''
             
@@ -414,8 +408,7 @@ class MainViewController
         width = 320
         stats = @stats
         if /iPhone|iPad/.test navigator.userAgent
-            dimension = DROPBOX_THUMBNAIL_DIMENSIONS[size]
-            max = Math.floor(5000000 / (width * width * dimension[0] / dimension[1])) # 5000000 is limit of canvas.
+            max = Math.floor CANVAS_MAX_PIXELS / coverFlowCanvasPixels width, DROPBOX_THUMBNAIL_DIMENSIONS[size][0] / DROPBOX_THUMBNAIL_DIMENSIONS[size][1]
             if @stats.length > max
                 stats = @stats[0...max]
                 setTimeout (-> alert 'Too many files, trying to some of them.'), 0
@@ -498,6 +491,9 @@ class MainViewController
                     $popovered = null
                     event.stopPropagation()
             ), true
+            
+    _initializeSettingButton: ->
+        $('#setting').on 'click', ->
 
     _onClickFileRow: (event) =>
         # NOTE: when using fat arror, use event.currentTarget instead of this.
@@ -521,6 +517,26 @@ class MainViewController
         event.stopPropagation() # prevent clicking Row.
         false # prevent Anchor default action.
         
+    # returns an array of td generators in displaying order.
+    _tdGenerators: (search = false) ->
+        tdGenerators = [
+            ['image', (stat) -> "<td><img height=\"48\" src=\"#{thumbnailUrl stat}\"></td>"]
+            ['name', (stat) -> "<td>#{stat.name}</td>"]
+            ['date', (stat) -> "<td>#{dateString stat.modifiedAt}</td>"]
+        ]
+        if search
+            tdGenerators.splice 2, 0, ['place', (stat) -> "<td><a href=\"#\">#{stat.path.replace /\/[^\/]*?$/, ''}</a></td>"]
+            console.log tdGenerators
+        else
+            tdGenerators.splice 3, 0,
+                ['size', (stat) -> "<td style=\"text-align: right;\">#{byteString stat.size}</td>"],
+                ['kind', (stat) -> "<td>#{if stat.isFile then getExtension stat.name else 'folder'}</td>"]
+        tdGenerators
+
+    # returns th generator aware of order and direction.
+    _thGenerator: (order, direction) ->
+        (key) -> "<th#{(if order is key then ' class=' + direction else '') +
+            (if key is 'size' then ' style=\"text-align: right;\"' else '')}><span>#{key}</span></th>"
 
 # is resonsible for information modal window for each file.
 class FileModalController

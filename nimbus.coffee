@@ -82,7 +82,7 @@ obj2query = (obj) ->
 
 # returns number of pixels in each canvas using cover flow.
 # height of canvas is twice of scaled image.
-coverFlowCanvasPixels: (canvasWidth, imageRatio) ->
+coverFlowCanvasPixels = (canvasWidth, imageRatio) ->
     Math.ceil canvasWidth * 2 * canvasWidth * imageRatio
 
 # returns text width in element.
@@ -338,6 +338,7 @@ class MainViewController
 
     # updates folder view.
     updateView: (@stats, @search = false) ->
+        console.log 'pass'
         @_clearViews()
         @_showView @_viewMode()
 

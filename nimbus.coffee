@@ -532,13 +532,15 @@ class MainViewController
         $input = $target.children()
         $input.css 'width', width
         inputCancel = (event) =>
-            if event.target isnt $input[0]
+            if event.type is 'blur' or (event.type is 'click' and event.target isnt $input[0])
                 $td = $input.parent()
                 $td.text $td.parent().data('dropbox-stat').name
-                @enableClick()                
-        # cancel if touching except input.
+                $(document).off 'click', inputCancel
+                # input is eliminated at this point. Sould I remove blur handler?
+                @enableClick()
+        # cancel if touching except input. it doen't work on iOS...
         $(document).on 'click', inputCancel
-
+        $input.on 'blur', inputCancel
         $input.on 'keypress', (event) => # uses keypress rather than change because enter without change does not trigger change.
             return if event.keyCode != 13
             $target = $(event.currentTarget)
@@ -555,11 +557,12 @@ class MainViewController
                         else
                             $target.parents('tr').data 'dropbox-stat', stat
                             $target.parent().text stat.name
+                        $(document).off 'click', inputCancel
                         @enableClick()
                 else
                     $target.parent().text stat.name
+                    $(document).off 'click', inputCancel
                     @enableClick()
-                $(document).off 'click', inputCancel
         $input.focus()
         @disableClick()
         event.stopPropagation() # prevent clicking Row.

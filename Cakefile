@@ -2,7 +2,7 @@
 
 src = ['nimbus.coffee']
 
-task 'watch', 'continually build with --watch', ->
+task 'nimbus', 'continually build with --watch', ->
     p1 = spawn 'coffee', ['-wc'].concat src
     p1.stdout.on 'data', (data) -> console.log data.toString().trim()
 

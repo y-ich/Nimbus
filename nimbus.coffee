@@ -423,9 +423,10 @@ class MainViewController
         if /iPhone|iPad/.test navigator.userAgent
             max = Math.floor CANVAS_MAX_PIXELS / coverFlowCanvasPixels width, DROPBOX_THUMBNAIL_DIMENSIONS[size][0] / DROPBOX_THUMBNAIL_DIMENSIONS[size][1]
             if @stats.length > max
-                stats = @stats[0...max]
-                setTimeout (-> alert 'Too many files, trying to some of them.'), 0
-
+                stats = @stats.filter (stat) -> stat.isFile and not /~$/.test stat.name
+                if stats.length > max
+                    stats = stats[0...max]
+                    setTimeout (-> alert 'Too many files, trying to some of them.'), 0
         options =
             width: '100%'
             coverwidth: width
